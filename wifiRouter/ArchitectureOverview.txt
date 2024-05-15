@@ -1,0 +1,27 @@
+Architecture Overview Document for wifi router
+***********************************************
+
+Introduction:
+This document describes the architecture ofa WiFi access point set up using a Raspberry Pi 5, RaspAP, and NoDogSplash.
+The purpose of this setup is to provide a controlled WiFi network where users can connect and interact through a 
+captive portal before accessing the internet.
+
+Hardware Requirements:
+* Raspberry Pi with Network Interface Card (internal/external): serves as the hardware base for the WiFi access point and mange all the coonection to the wifi.
+* Main router: router with internet connection
+* Ethernet Cable / additional Network Interface Card : For internet connection to the main router.
+
+Software Components:
+* Raspberry Pi OS lite : The operating system for the Raspberry Pi.
+* RaspAP: A software package that provides a wireless access point.
+* NoDogSplash: A captive portal solution that provides a customizable landing page for users connecting to the WiFi network.
+
+Network Setup:
+* Internet Connection: The Raspberry Pi connects to the internet via its Ethernet port or through another WiFi network.
+* RaspAP Configuration: Configures the Raspberry Pi to broadcast its own WiFi network.
+                        This involves setting up SSID, security options, DHCP settings, etc.
+* NoDogSplash Integration: Sets up a captive portal that users must interact with before gaining access to the internet.
+
+general Comments:
+* We chose to implement the router on a Raspberry Pi because we wanted a plug-and-play solution that can provide both an access point
+  and the function of a computer in a single component
