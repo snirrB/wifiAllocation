@@ -1,29 +1,77 @@
-from sqlalchemy import Boolean, Column, Integer, String, Float
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from datetime import datetime
+from typing import Optional
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
-# SQLALCHEMY_DATABASE_URL = "postgresql://user:password@postgresserver/db"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
+from email_validator import validate_email
+from pydantic import field_validator
+from sqlmodel import Field, SQLModel
 
 
-class User(Base):
+class PremiumUser(SQLModel, table=True):
+    id: int | None = Field(primary_key=True, default=None)
+    token: str | None = Field(default=None)
+    username: str = Field(unique=True)
+    password: str
+    email: str = Field(unique=True)
+
+
+class FreeUser(SQLModel, table=True):
+    token: str = Field(primary_key=True)
+    time_of_registration: datetime = Field(description="When the user has been registered")
+
+
+class IBasePremiumUser(SQLModel):
+    id: Optional[int] = None
+    token: Optional[str]
+    username: str
+    email: str
+
+
+class IBaseFreeUser(SQLModel):
+    token: str
+
+
+class IFreeUserCreate(IBaseFreeUser, table=False):
+    time_of_registration: datetime = Field(default_factory=datetime.now)
+
+
+class IFreeUserRead(IBaseFreeUser, table=False):
+    pass
+
+
+class FreeUserUpdate(IBaseFreeUser):
+    pass
+
+
+class IPremiumUserCreate(IBasePremiumUser, table=False):
     """
-    The "users" table will hold the data we need for users in our application
+    This class represents a creation user object in the db
     """
-    __tablename__ = "users"
-    # The id of each user will be the primary key
-    id = Column(Integer, primary_key=True)
-    # The email are unique so we can have correlation between a user and his account
-    email = Column(String, unique=True, index=True)
-    is_active = Column(Boolean, default=False)
-    # We are holding for each user the usage of data
-    data_usage = Column(Float, default=0)
+    password: str
 
+    @field_validator('username')
+    @classmethod
+    def valid_username(cls, v: str):
+        """
+        Asserts that the id is valid
+        :param v: The given id
+        """
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str):
+        """
+        validate the email address is a valid address
+        :param v: The given email address
+        """
+        email = validate_email(v, check_deliverability=False)
+        return email.normalized
+
+
+class IPremiumUserRead(IBasePremiumUser, table=False):
+    """
+    The read object of Premium user
+    """
+    token: str
+    username: str
+    email: str
