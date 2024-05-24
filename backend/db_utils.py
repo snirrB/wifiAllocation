@@ -23,7 +23,8 @@ def get_password_hash(password: str) -> str:
     :return: Hashed password
     """
     logger.debug("Hashing a new password")
-    return pwd_context.hash(password)
+    pwd = pwd_context.hash(password + secret_key)
+    return pwd
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -58,6 +59,7 @@ def add_new_premium_user(new_user: IPremiumUserCreate, session):
     """
     try:
         premium_user = PremiumUser(**new_user.dict())
+        premium_user.password = get_password_hash(premium_user.password)
         session.add(premium_user)
         session.commit()
         authenticate_user(premium_user.token)
@@ -126,3 +128,19 @@ async def add_free_user(token: str, session):
         logger.error(f"An error occurred while trying to add new free user, error: {e}")
         session.rollback()
         raise HTTPException(status_code=400, detail=e.args)
+
+
+def validate_user(pwd: str, email: str, session) -> bool:
+    """
+    Receive a password and email and assert that the email in the db holds the same password as pwd
+    :param pwd: The password received from the user
+    :param email: The email trying to log to
+    :param session: The engine session object
+    :return: True if the pwd is identical else false
+    """
+    user = session.exec(select(PremiumUser).where(PremiumUser.email == email))
+    if not user:
+        raise HTTPException(status_code=400, detail=f"Non existing email: {email}")
+    return verify_password(plain_password=pwd, hashed_password=user.password)
+
+

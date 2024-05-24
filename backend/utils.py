@@ -4,9 +4,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 import requests
+from fastapi import HTTPException
 from sqlmodel import select
 
-from backend.db import FreeUser
+from backend.db import FreeUser, IPremiumUserRead
+from backend.db_utils import validate_user
 
 logger = logging.getLogger("WifiAllocation")
 logger.setLevel(logging.DEBUG)
@@ -34,6 +36,19 @@ def authenticate_user(token: str):
     """
     logger.debug(f"Sending authenticate request to no dog server with token: {token}")
     return requests.get(f"{no_dog_url}/auth/{token}")
+
+
+async def assert_valid_premium_user(user: dict, session) -> IPremiumUserRead:
+    """
+    compare the user data received with the data stored in the db
+    :param user: The user data received
+    :param session: The engine session object
+    :return: IPremiumUserRead holding the data of the user
+    """
+    if validate_user(pwd=user["password"], email=user["email"], session=session):
+        logger.debug(f"A valid user logged in, auth user with no dog, email: {user['email']}")
+        return authenticate_user(token=user["token"])
+    raise HTTPException(status_code=400, detail="invalid password \ user name")
 
 
 async def get_no_dog_status():

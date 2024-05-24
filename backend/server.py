@@ -12,7 +12,8 @@ from starlette.responses import JSONResponse
 from backend.db import IFreeUserRead
 from backend.db_utils import create_db_healthcheck, IPremiumUserCreate, add_new_premium_user, IPremiumUserRead, \
     remove_premium_user, add_free_user
-from backend.utils import get_no_dog_status, logger, delete_expired_users, force_high_avg_speed, get_avg_speed
+from backend.utils import get_no_dog_status, logger, delete_expired_users, force_high_avg_speed, get_avg_speed, \
+    assert_valid_premium_user
 
 no_dog_url = os.getenv("NO_DOG_URL")
 sqlite_url = os.getenv("SQLITE_URL_PREFIX") + os.getenv("SQLITE_FILE_NAME")
@@ -79,6 +80,18 @@ async def get_status(session=Depends(get_db)):
     return JSONResponse(content={"no dog status": no_dog_resp, "db_status": sql_resp})
 
     # async def get_nodog_status(session=Depends(get_db)):
+
+
+@app_route.get("/login/premium/")
+async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
+    """
+    Receive a dict holding the data of a premium user trying to log in, assert that it is a valid user, and behave
+    accordingly
+    :param user_to_login: The data of the user trying to log in
+    :param session: The engine session object
+    :return:
+    """
+    return await assert_valid_premium_user(user=user_to_login, session=session)
 
 
 @db_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str])
