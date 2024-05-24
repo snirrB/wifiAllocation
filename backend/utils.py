@@ -32,6 +32,7 @@ def authenticate_user(token: str):
     :param token: The token receives
     :return: JsonResponse holding the result of the auth
     """
+    logger.debug(f"Sending authenticate request to no dog server with token: {token}")
     return requests.get(f"{no_dog_url}/auth/{token}")
 
 
@@ -57,18 +58,27 @@ async def delete_expired_users(session):
     for user in expired_users:
         logger.debug(f"Found free user to delete: {user.token}")
         await remove_and_deauth_user(user=user, session=session)
-        # TODO: think of recover option you can do in case of failure
     session.commit()
 
 
-async def assert_avg_speed(session):
+async def get_avg_speed():
     """
-    Receives the current download speed, in case it is lower than MINIMUM_SPEED_ALLOWED we remove all free users
-    :param session: The engine session object
+    :return: The average speed receive from the server
     """
     res = requests.get(f"{no_dog_url}/getTotalUsageAndAvgSpeed")
     avg_speed = dict(res.content)["message"]["avg_download_speed"]
-    if avg_speed < os.getenv("MINIMUM_SPEED_ALLOWED"):
+    logger.debug(f"Got average speed from server: {avg_speed}")
+    return avg_speed
+
+
+async def force_high_avg_speed(session, average_download_speed):
+    """
+    Receives the current download speed, in case it is lower than MINIMUM_SPEED_ALLOWED we remove all free users
+    :param session: The engine session object
+    :param average_download_speed: The average download speed from the server
+    """
+    if average_download_speed < os.getenv("MINIMUM_SPEED_ALLOWED"):
+        logger.debug("The average speed is low, starting to remove free users from the server")
         await remove_all_free_users(session=session)
 
 
@@ -94,3 +104,12 @@ async def remove_and_deauth_user(user, session):
     if res.status_code == 200:
         session.delete(user)
         logger.debug(f"delete user with token: {user.token}")
+
+
+"""
+#TODO:
+3. add a function to check the current speed, and if it slower than X do not let anybody get in the network.
+4. add the premium url section.
+6. assert implemented the api of the no dog as needed.
+
+"""

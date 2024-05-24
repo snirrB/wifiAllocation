@@ -1,6 +1,7 @@
 import os
 
 from fastapi import HTTPException
+from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
@@ -8,6 +9,31 @@ from backend.db import PremiumUser, IPremiumUserCreate, IPremiumUserRead, IFreeU
 from backend.utils import logger, authenticate_user
 
 no_dog_url = os.getenv("NO_DOG_URL")
+
+# Password hashing utilities
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+secret_key = os.getenv("SECRET_KEY")
+
+
+def get_password_hash(password: str) -> str:
+    """
+    Gets a password and hashes it using the bcrypt hashing
+    :param password: The raw password received from the user
+    :return: Hashed password
+    """
+    logger.debug("Hashing a new password")
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Gets a password and compares it to the hashed password stored in the db
+    :param plain_password: The password received from the user
+    :param hashed_password: The hashed password stored in the db
+    :return: Boolean containing the result of the comparison between the hashed and the rae passwords
+    """
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 async def create_db_healthcheck(session):
@@ -93,8 +119,9 @@ async def add_free_user(token: str, session):
         new_free_user = FreeUser(**new_free_user.dict())
         session.add(new_free_user)
         session.commit()
+        response = await authenticate_user(token=token)
         logger.debug(f"Added a new free user with token {token}")
-        return IFreeUserRead.from_orm(new_free_user)
+        return IFreeUserRead.from_orm(new_free_user), response
     except Exception as e:
         logger.error(f"An error occurred while trying to add new free user, error: {e}")
         session.rollback()

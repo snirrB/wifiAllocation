@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Union
+from typing import Union, Tuple
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -9,9 +9,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 from starlette.responses import JSONResponse
 
+from backend.db import IFreeUserRead
 from backend.db_utils import create_db_healthcheck, IPremiumUserCreate, add_new_premium_user, IPremiumUserRead, \
     remove_premium_user, add_free_user
-from backend.utils import get_no_dog_status, logger, delete_expired_users
+from backend.utils import get_no_dog_status, logger, delete_expired_users, force_high_avg_speed, get_avg_speed
 
 no_dog_url = os.getenv("NO_DOG_URL")
 sqlite_url = os.getenv("SQLITE_URL_PREFIX") + os.getenv("SQLITE_FILE_NAME")
@@ -20,8 +21,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 app_route = APIRouter()
 db_route = APIRouter(prefix="/db")
 
-
 # Run the delete_expired_users function periodically (every minute)
+
+average_download_speed = 0.0
 
 
 def get_db():
@@ -32,8 +34,19 @@ def get_db():
 @app_route.on_event("startup")
 async def startup_event():
     loop = asyncio.get_running_loop()
-    loop.create_task(run_periodically())
+    loop.create_task(set_avg_speed())
     loop.create_task(remain_speed())
+    loop.create_task(delete_expired_users_background())
+
+
+async def set_avg_speed():
+    """
+    Receive the average download speed from server
+    :return:
+    """
+    global average_download_speed
+    average_download_speed = await get_avg_speed()
+    await asyncio.sleep(300)  # Wait for 5 minutes
 
 
 async def remain_speed():
@@ -43,10 +56,10 @@ async def remain_speed():
     while True:
         await asyncio.sleep(600)  # Run every 10 minute
         session = next(get_db())
-        await assert_avg_speed(session)
+        await force_high_avg_speed(session, average_download_speed=average_download_speed)
 
 
-async def run_periodically():
+async def delete_expired_users_background():
     """
     Attach delete_expired_users function to the event loop
     """
@@ -82,8 +95,8 @@ async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
     return JSONResponse(status_code=200, content=resp.dict())
 
 
-@db_route.delete("/delete")
-async def test_delete(user: dict, session=Depends(get_db)):
+@db_route.delete("/delete_premium_user")
+async def delete_premium_user(user: dict, session=Depends(get_db)):
     res = remove_premium_user(username_to_delete=user["user_to_add"]["username"], session=session)
     return JSONResponse(status_code=200, content=res)
 
@@ -95,5 +108,5 @@ async def create_new_free_user(token: str, session=Depends(get_db)):
     :param token: The token received from the no dog
     :param session: The engine session
     """
-    res = await add_free_user(token=token, session=session)
-    return JSONResponse(status_code=200, content=res.dict())
+    res: Tuple[IFreeUserRead, JSONResponse] = await add_free_user(token=token, session=session)
+    return JSONResponse(status_code=res[1].status_code, content=res[0].dict())
