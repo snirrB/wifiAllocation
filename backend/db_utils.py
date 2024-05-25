@@ -1,4 +1,5 @@
 import os
+from typing import Type
 
 from fastapi import HTTPException
 from passlib.context import CryptContext
@@ -6,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
 from backend.db import PremiumUser, IPremiumUserCreate, IPremiumUserRead, IFreeUserCreate, FreeUser, IFreeUserRead
-from backend.utils import logger, authenticate_user
+from backend.utils import logger, UserType
 
 no_dog_url = os.getenv("NO_DOG_URL")
 
@@ -23,8 +24,20 @@ def get_password_hash(password: str) -> str:
     :return: Hashed password
     """
     logger.debug("Hashing a new password")
+    # Create the hash using the secret key
     pwd = pwd_context.hash(password + secret_key)
     return pwd
+
+
+user_model_mapping = {
+    UserType.FREE: FreeUser,
+    UserType.PREMIUM: PremiumUser
+}
+
+user_model_read_mapping = {
+    UserType.FREE: IFreeUserRead,
+    UserType.PREMIUM: IPremiumUserRead
+}
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -50,7 +63,7 @@ async def create_db_healthcheck(session):
         return f"DB is not up, got an error: {e}"
 
 
-def add_new_premium_user(new_user: IPremiumUserCreate, session):
+def add_new_premium_user_to_db(new_user: IPremiumUserCreate, session):
     """
     Add a new premium user to the db
     :param new_user: The new user to add
@@ -62,7 +75,6 @@ def add_new_premium_user(new_user: IPremiumUserCreate, session):
         premium_user.password = get_password_hash(premium_user.password)
         session.add(premium_user)
         session.commit()
-        authenticate_user(premium_user.token)
         logger.debug(f"Added a new user to db: {new_user}")
         return IPremiumUserRead.from_orm(premium_user)
 
@@ -76,24 +88,29 @@ def add_new_premium_user(new_user: IPremiumUserCreate, session):
         raise HTTPException(status_code=400, detail=f"Unable to add a new user to db, error: {e}")
 
 
-def remove_premium_user(username_to_delete: str, session):
+def remove_user(session, user_type: UserType, user_email: str = None, user_token: str = None):
     """
-    Gets a username of an existing user to be deleted and delete it from the db
-    :param username_to_delete: A string holds the username to be deleted
+    Gets a email of an existing user to be deleted and delete it from the db
+    :param user_email: A string holds the email to be deleted, default is none
     :param session: The engine session object
+    :param user_token: The token of the user to be deleted, default is None
+    :param user_type: Holding the type of the user to be removed
     :return: IUserRead object holding the data of the deleted user
     """
-    logger.debug(f"About to delete {username_to_delete} from db")
-    result = session.exec(select(PremiumUser).where(PremiumUser.username == username_to_delete))
+    user_type_mapping: Type[FreeUser] | Type[PremiumUser] = user_model_mapping.get(user_type)
+    logger.debug(f"About to delete {user_email} from db")
+    if user_email:
+        result = session.exec(select(user_type_mapping).where(user_type_mapping.email == user_email))
+    else:
+        result = session.exec(select(user_type_mapping).where(user_type_mapping.token == user_token))
     user = result.first()
     if user:
         session.delete(user)
         session.commit()
-        # TODO remove free user
-        return IPremiumUserRead(**user.dict())
+        return user_model_read_mapping.get(user_type)(**user.dict())
     else:
-        logger.error(f"Could not find a username {username_to_delete} in db")
-        raise HTTPException(status_code=404, detail=f"Could not find a user with username {username_to_delete} in db")
+        logger.error(f"Could not find a email {user_email} in db")
+        raise HTTPException(status_code=404, detail=f"Could not find a user with email {user_email} in db")
 
 
 def handle_integrity_error(error, user: IPremiumUserCreate):
@@ -103,31 +120,14 @@ def handle_integrity_error(error, user: IPremiumUserCreate):
     :param user: The user with the conflict
     :raises: HTTPException with the error
     """
-    if "username" in error:
-        raise HTTPException(status_code=400, detail=f"Username {user.username} already exists")
-    elif "email" in error:
+    if "email" in error:
+        logger.error(f"Got an integrity error, an email already exists in db, error: {error}")
         raise HTTPException(status_code=400, detail=f"Email {user.email} already exists")
-
-
-async def add_free_user(token: str, session):
-    """
-    Receives a token of a new free user and adds it to the db
-    :param token:
-    :param session: The engine session object
-    :return: The FreeUserRead object
-    """
-    try:
-        new_free_user = IFreeUserCreate(token=token)
-        new_free_user = FreeUser(**new_free_user.dict())
-        session.add(new_free_user)
-        session.commit()
-        response = await authenticate_user(token=token)
-        logger.debug(f"Added a new free user with token {token}")
-        return IFreeUserRead.from_orm(new_free_user), response
-    except Exception as e:
-        logger.error(f"An error occurred while trying to add new free user, error: {e}")
-        session.rollback()
-        raise HTTPException(status_code=400, detail=e.args)
+    elif "token" in error:
+        logger.error(f"Got an integrity error, a token already exists in db, error: {error}")
+        raise HTTPException(status_code=400, detail=f"token {user.token} already exists")
+    logger.error(f"Got an integrity error, error: {error}")
+    raise HTTPException(status_code=400, detail=f"Integrity error in db, error: {error}")
 
 
 def validate_user(pwd: str, email: str, session) -> bool:
@@ -144,3 +144,26 @@ def validate_user(pwd: str, email: str, session) -> bool:
     return verify_password(plain_password=pwd, hashed_password=user.password)
 
 
+def add_new_free_user_to_db(token: str, session):
+    """
+    Gets a token and a session engine and adds it to the db
+    :param token: The token of the free user to add
+    :param session: The engine session object
+    :return: IFreeUserRead object holding the creation of the new user
+    """
+    try:
+        new_free_user = IFreeUserCreate(token=token)
+        new_free_user = FreeUser(**new_free_user.dict())
+        session.add(new_free_user)
+        session.commit()
+        logger.debug(f"Added a new free user to the db, token:{token}")
+        return IFreeUserRead.from_orm(new_free_user)
+    except IntegrityError as e:
+        logger.error(f"could not add a new user because of uniqueness problem, {e.args}")
+        session.rollback()
+        handle_integrity_error(error=str(e.orig).lower(), user=new_free_user)
+    except Exception as e:
+        logger.error(f"Unable to add a new user to db, error: {e}")
+        session.rollback()
+        raise HTTPException(status_code=400, detail=f"Unable to add a new user to db, error: {e}")
+# TODO add a decorator for asserting that there is enough bandwidth to add another user

@@ -9,7 +9,6 @@ from sqlmodel import Field, SQLModel
 class PremiumUser(SQLModel, table=True):
     id: int | None = Field(primary_key=True, default=None)
     token: str | None = Field(default=None)
-    username: str = Field(unique=True)
     password: str
     email: str = Field(unique=True)
 
@@ -22,7 +21,6 @@ class FreeUser(SQLModel, table=True):
 class IBasePremiumUser(SQLModel):
     id: Optional[int] = None
     token: Optional[str]
-    username: str
     email: str
 
 
@@ -48,15 +46,6 @@ class IPremiumUserCreate(IBasePremiumUser, table=False):
     """
     password: str
 
-    @field_validator('username')
-    @classmethod
-    def valid_username(cls, v: str):
-        """
-        Asserts that the id is valid
-        :param v: The given id
-        """
-        return v
-
     @field_validator('email')
     @classmethod
     def validate_email(cls, v: str):
@@ -73,5 +62,4 @@ class IPremiumUserRead(IBasePremiumUser, table=False):
     The read object of Premium user
     """
     token: str
-    username: str
     email: str

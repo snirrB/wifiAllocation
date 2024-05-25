@@ -10,10 +10,11 @@ from sqlmodel import Session
 from starlette.responses import JSONResponse
 
 from backend.db import IFreeUserRead
-from backend.db_utils import create_db_healthcheck, IPremiumUserCreate, add_new_premium_user, IPremiumUserRead, \
-    remove_premium_user, add_free_user
-from backend.utils import get_no_dog_status, logger, delete_expired_users, force_high_avg_speed, get_avg_speed, \
-    assert_valid_premium_user
+from backend.db_utils import create_db_healthcheck, IPremiumUserCreate, IPremiumUserRead, \
+    remove_user
+from backend.utils import logger, UserType
+from backend.server_utils import assert_valid_premium_user, get_no_dog_status, delete_expired_users, get_avg_speed, \
+    force_high_avg_speed, add_free_user, add_new_premium_user, network_speed_check
 
 no_dog_url = os.getenv("NO_DOG_URL")
 sqlite_url = os.getenv("SQLITE_URL_PREFIX") + os.getenv("SQLITE_FILE_NAME")
@@ -34,6 +35,10 @@ def get_db():
 
 @app_route.on_event("startup")
 async def startup_event():
+    """
+    Adding the background tasks to run while the server is running
+    :return:
+    """
     loop = asyncio.get_running_loop()
     loop.create_task(set_avg_speed())
     loop.create_task(remain_speed())
@@ -104,17 +109,18 @@ async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
     """
     logger.debug(f"About to add a new user to db {user_to_add}")
     new_user = IPremiumUserCreate(**user_to_add["user_to_add"])
-    resp = add_new_premium_user(new_user=new_user, session=session)
-    return JSONResponse(status_code=200, content=resp.dict())
+    resp = await add_new_premium_user(new_user=new_user, session=session)
+    return JSONResponse(status_code=200, content=resp)
 
 
 @db_route.delete("/delete_premium_user")
 async def delete_premium_user(user: dict, session=Depends(get_db)):
-    res = remove_premium_user(username_to_delete=user["user_to_add"]["username"], session=session)
+    res = remove_user(user_email=user["user_to_add"]["email"], session=session, user_type=UserType.PREMIUM)
     return JSONResponse(status_code=200, content=res)
 
 
 @db_route.post("/add_free_user")
+@network_speed_check(average_download_speed=average_download_speed)
 async def create_new_free_user(token: str, session=Depends(get_db)):
     """
     Creates a new free user and stores it in the db
@@ -123,3 +129,5 @@ async def create_new_free_user(token: str, session=Depends(get_db)):
     """
     res: Tuple[IFreeUserRead, JSONResponse] = await add_free_user(token=token, session=session)
     return JSONResponse(status_code=res[1].status_code, content=res[0].dict())
+
+
