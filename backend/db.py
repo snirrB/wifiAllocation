@@ -10,6 +10,7 @@ class PremiumUser(SQLModel, table=True):
     id: int | None = Field(primary_key=True, default=None)
     token: str | None = Field(default=None)
     password: str
+    active: bool = Field(default=False)
     email: str = Field(unique=True)
 
 

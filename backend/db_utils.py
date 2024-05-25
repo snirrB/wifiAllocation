@@ -90,7 +90,7 @@ def add_new_premium_user_to_db(new_user: IPremiumUserCreate, session):
 
 def remove_user(session, user_type: UserType, user_email: str = None, user_token: str = None):
     """
-    Gets a email of an existing user to be deleted and delete it from the db
+    Gets an email or token of an existing user to be deleted and delete it from the db
     :param user_email: A string holds the email to be deleted, default is none
     :param session: The engine session object
     :param user_token: The token of the user to be deleted, default is None
@@ -113,7 +113,7 @@ def remove_user(session, user_type: UserType, user_email: str = None, user_token
         raise HTTPException(status_code=404, detail=f"Could not find a user with email {user_email} in db")
 
 
-def handle_integrity_error(error, user: IPremiumUserCreate):
+def handle_integrity_error(error, user: IPremiumUserCreate | FreeUser):
     """
     In case of integrity error we want to tell the client explicitly what is the problem
     :param error: The error received from the db
@@ -166,4 +166,47 @@ def add_new_free_user_to_db(token: str, session):
         logger.error(f"Unable to add a new user to db, error: {e}")
         session.rollback()
         raise HTTPException(status_code=400, detail=f"Unable to add a new user to db, error: {e}")
-# TODO add a decorator for asserting that there is enough bandwidth to add another user
+
+
+def activate_premium_user_in_db(session, new_user: IPremiumUserCreate):
+    """
+    Set the active field in the db of the user into True
+    :param session: The engine session object
+    :param new_user: IPremiumUserCreate object holding the details of the user
+    """
+    user: PremiumUser | None = session.exec(select(PremiumUser).where(PremiumUser.email == new_user.email))
+    if user:
+        user.active = True
+        user.token = new_user.token
+        session.add(user)
+        logger.info(f"User with email: {user.email} logged in, changed active to True")
+        session.commit()
+        return IPremiumUserRead.from_orm(user)
+    raise HTTPException(status_code=404, detail=f"User with email {user.email} could not be found")
+
+
+def deactivate_premium_user_in_db(session, email: str):
+    """
+    Set the active field in the db of the user into True
+    :param session: The engine session object
+    :param email: The email of the user to disconnect
+    """
+    user: PremiumUser | None = session.exec(select(PremiumUser).where(PremiumUser.email == email))
+    if user:
+        user.active = False
+        session.add(user)
+        logger.info(f"User with email: {user.email} logged out, changed active to False")
+        session.commit()
+        return IPremiumUserRead.from_orm(user)
+    raise HTTPException(status_code=404, detail=f"User with email {user.email} could not be found")
+
+
+def get_users_count(session):
+    """
+    Return the count of users are currently connected to the db
+    :param session: The engine session object
+    :return: The count of users who are logged in at the moment
+    """
+    premium_users_count: int = session.exec(select(PremiumUser).where(PremiumUser.active is True)).count()
+    active_free_users_count: int = session.exec(select(FreeUser)).count()
+    return premium_users_count + active_free_users_count

@@ -7,8 +7,9 @@ from fastapi import HTTPException
 from sqlmodel import select
 from starlette.responses import JSONResponse
 
-from backend.db import FreeUser, IFreeUserRead, IPremiumUserRead
-from backend.db_utils import validate_user, add_new_free_user_to_db, remove_user, add_new_premium_user_to_db
+from backend.db import FreeUser, IFreeUserRead, IPremiumUserRead, IPremiumUserCreate
+from backend.db_utils import validate_user, add_new_free_user_to_db, remove_user, add_new_premium_user_to_db, \
+    activate_premium_user_in_db, get_users_count
 from backend.utils import logger, no_dog_url, UserType
 
 
@@ -44,16 +45,17 @@ async def add_new_premium_user(new_user, session) -> IPremiumUserRead:
                         detail=f"Unable to create a new premium user with error: {res.content}")
 
 
-async def assert_valid_premium_user(user: dict, session):
+async def assert_valid_premium_user(user: IPremiumUserCreate, session):
     """
     compare the user data received with the data stored in the db
     :param user: The user data received
     :param session: The engine session object
     :return: IPremiumUserRead holding the data of the user
     """
-    if validate_user(pwd=user["password"], email=user["email"], session=session):
+    if validate_user(pwd=user.password, email=user.email, session=session):
         logger.debug(f"A valid user logged in, auth user with no dog, email: {user['email']}")
-        return authenticate_user(token=user["token"])
+        response = authenticate_user(token=user["token"])
+        activate_premium_user_in_db(session=session, new_user=user)
     raise HTTPException(status_code=400, detail="invalid password or user name")
 
 
@@ -92,13 +94,19 @@ async def get_avg_speed():
     return avg_speed
 
 
-async def force_high_avg_speed(session, average_download_speed):
+async def force_high_avg_speed(session, average_download_speed, minimum_allowed_speed):
     """
     Receives the current download speed, in case it is lower than MINIMUM_SPEED_ALLOWED we remove all free users
     :param session: The engine session object
+    :param minimum_allowed_speed: The minimum allowed speed from the env
     :param average_download_speed: The average download speed from the server
     """
-    if average_download_speed < os.getenv("MINIMUM_SPEED_ALLOWED"):
+    total_count_of_users: int = get_users_count(session=session)
+    # TODO add the calculation using the current active members
+    # TODO ask snir to add sessions managing in the nodog - using the logout endpoint
+    # ClientForceTimeout 3600  # Force logout after 1 hour
+    # ClientIdleTimeout 300    # Logout after 5 minutes of inactivity
+    if average_download_speed < minimum_allowed_speed:
         logger.debug("The average speed is low, starting to remove free users from the server")
         await remove_all_free_users(session=session)
 
@@ -113,6 +121,14 @@ async def remove_all_free_users(session):
     for user in free_users:
         await remove_and_deauth_user(user=user, session=session, user_type=UserType.FREE)
     session.commit()
+
+
+async def deauth_premium_user(token: str):
+    """
+    Gets an email of an existing premium user and only disconnect him
+    :param token: The email of the user to disconnect
+    """
+    return requests.get(f"{no_dog_url}/deauth/{token}")
 
 
 async def remove_and_deauth_user(user, session, user_type: UserType):
@@ -156,6 +172,9 @@ def network_speed_check(average_download_speed: float):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             if average_download_speed < float(os.getenv("MINIMUM_DOWNLOAD_SPEED")):
+                logger.info(
+                    f"There are too many users in the network, unable to add another user,"
+                    f" avg_speed: {average_download_speed}")
                 raise HTTPException(status_code=403, detail="Could not another user, the network is full")
             return await func(*args, **kwargs)
 

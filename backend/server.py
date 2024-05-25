@@ -11,10 +11,10 @@ from starlette.responses import JSONResponse
 
 from backend.db import IFreeUserRead
 from backend.db_utils import create_db_healthcheck, IPremiumUserCreate, IPremiumUserRead, \
-    remove_user
-from backend.utils import logger, UserType
+    remove_user, deactivate_premium_user_in_db
 from backend.server_utils import assert_valid_premium_user, get_no_dog_status, delete_expired_users, get_avg_speed, \
-    force_high_avg_speed, add_free_user, add_new_premium_user, network_speed_check
+    force_high_avg_speed, add_free_user, add_new_premium_user, network_speed_check, deauth_premium_user
+from backend.utils import logger, UserType
 
 no_dog_url = os.getenv("NO_DOG_URL")
 sqlite_url = os.getenv("SQLITE_URL_PREFIX") + os.getenv("SQLITE_FILE_NAME")
@@ -59,10 +59,12 @@ async def remain_speed():
     """
     Attach the remain_high_speed function to the event loop
     """
+    minimum_allowed_speed = os.getenv("MINIMUM_SPEED_ALLOWED")
     while True:
         await asyncio.sleep(600)  # Run every 10 minute
         session = next(get_db())
-        await force_high_avg_speed(session, average_download_speed=average_download_speed)
+        await force_high_avg_speed(session, average_download_speed=average_download_speed,
+                                   minimum_allowed_speed=minimum_allowed_speed)
 
 
 async def delete_expired_users_background():
@@ -87,6 +89,18 @@ async def get_status(session=Depends(get_db)):
     # async def get_nodog_status(session=Depends(get_db)):
 
 
+@app_route.post("/logout/premium_user/{email}")
+async def logout_user(email: str, session=Depends(get_db)):
+    """
+    Gets an email of an existing premium user and deactivate it in the db
+    :param email: The email of the user to disconnect
+    :param session: The engine session object
+    :return:
+    """
+    user = deactivate_premium_user_in_db(email=email, session=session)
+    return deauth_premium_user(token=user.token)
+
+
 @app_route.get("/login/premium/")
 async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
     """
@@ -96,10 +110,12 @@ async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
     :param session: The engine session object
     :return:
     """
-    return await assert_valid_premium_user(user=user_to_login, session=session)
+    user = IPremiumUserCreate(**user_to_login["user_to_add"])
+    return await assert_valid_premium_user(user=user, session=session)
 
 
 @db_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str])
+@network_speed_check(average_download_speed=average_download_speed)
 async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
     """
     Receive the details of a new user and add it to the db
@@ -119,7 +135,7 @@ async def delete_premium_user(user: dict, session=Depends(get_db)):
     return JSONResponse(status_code=200, content=res)
 
 
-@db_route.post("/add_free_user")
+@db_route.post("/login/free")
 @network_speed_check(average_download_speed=average_download_speed)
 async def create_new_free_user(token: str, session=Depends(get_db)):
     """
@@ -129,5 +145,3 @@ async def create_new_free_user(token: str, session=Depends(get_db)):
     """
     res: Tuple[IFreeUserRead, JSONResponse] = await add_free_user(token=token, session=session)
     return JSONResponse(status_code=res[1].status_code, content=res[0].dict())
-
-
