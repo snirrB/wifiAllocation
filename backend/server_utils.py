@@ -1,16 +1,19 @@
 import os
 from datetime import datetime, timedelta
 from functools import wraps
+from typing import Type, List
 
 import requests
 from fastapi import HTTPException
 from sqlmodel import select
 from starlette.responses import JSONResponse
 
-from backend.db import FreeUser, IFreeUserRead, IPremiumUserRead, IPremiumUserCreate
+from backend.db import FreeUser, IFreeUserRead, IPremiumUserRead, IPremiumUserCreate, PremiumUser
 from backend.db_utils import validate_user, add_new_free_user_to_db, remove_user, add_new_premium_user_to_db, \
-    activate_premium_user_in_db, get_users_count
+    activate_premium_user_in_db, get_expired_premium_users
 from backend.utils import logger, no_dog_url, UserType
+
+minimum_allowed_speed = os.getenv("MINIMUM_SPEED_ALLOWED")
 
 
 def authenticate_user(token: str):
@@ -29,14 +32,47 @@ def authenticate_user(token: str):
         return JSONResponse(status_code=400, content="Unable to authenticate another user")
 
 
-async def add_new_premium_user(new_user, session) -> IPremiumUserRead:
+async def assert_server_speed(func):
+    """
+    Asserts that the speed server is valid, in case it is not raises an exception
+    """
+
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        current_speed = await get_avg_speed()
+        if int(current_speed) < int(minimum_allowed_speed):
+            await handle_too_slow_speed(*args, **kwargs, current_speed=current_speed)
+        return await func(*args, **kwargs)
+
+    return wrapper
+
+
+async def handle_too_slow_speed(args, kwargs):
+    """
+    A handler function for too slow speed case
+    """
+    premium_user = kwargs.pop('premium_user', None)
+    if premium_user:
+        # A premium user trying to log in but failed, remove all free users
+        await remove_all_free_users(session=kwargs.pop("session"))
+        if not int(kwargs.pop("current_speed")) < int(minimum_allowed_speed):
+            # Now there is a valid average speed
+            return
+    raise HTTPException(status_code=404, detail="There are too many users connected, try again later")
+
+#TODO combine both login of the premium user and the add of the premium user to one function
+
+
+@assert_server_speed
+async def add_new_premium_user(new_user, session, premium_user: bool = True) -> IPremiumUserRead:
     """
     Add a new premium user object
     :param new_user: A new user to add
     :param session: The engine session object
+    :param premium_user: holding the type of the user we are adding for the wrapper
     :return: The created user
     """
-    user = add_new_premium_user_to_db(new_user=new_user, session=session)
+    user: IPremiumUserRead = add_new_premium_user_to_db(new_user=new_user, session=session)
     res = authenticate_user(token=user.token)
     await handle_auth_request(response=res, session=session, user_type=UserType.PREMIUM, email=user.email)
     if res.status_code == 200:
@@ -71,17 +107,31 @@ async def get_no_dog_status():
         return {"status": "Can not connect to the no dog, check the no dog service"}
 
 
-async def delete_expired_users(session):
+async def delete_expired_free_users(session):
     """
     Gets all free users who were connected for more than 3 minutes and disconnect them, delete them from db as well
     :param session: The engine session object
     """
     expiration_time = datetime.now() - timedelta(minutes=5)
-    expired_users = session.exec(select(FreeUser).where(FreeUser.time_of_registration < expiration_time)).all()
+    expired_users = session.exec(select(FreeUser).where(FreeUser.login_time < expiration_time)).all()
     for user in expired_users:
         logger.debug(f"Found free user to delete: {user.token}")
         await remove_and_deauth_user(user=user, session=session, user_type=UserType.FREE)
     session.commit()
+
+
+async def delete_expired_premium_users(session, session_duration: int):
+    """
+    Delete and de authenticate all premium users who passed their session time
+    :param session: The engine session object
+    :param session_duration: The session duration from the env allowed for every premium user
+    :return: A list of IPremiumUserRead object holding the users who have been removed
+    """
+    expired_premium_users: List[PremiumUser] = get_expired_premium_users(session=session,
+                                                                         session_duration=session_duration)
+    for premium_user in expired_premium_users:
+        logger.debug(f"The session of user: {premium_user.email} expired, about to un auth it")
+        await remove_and_deauth_user(session=session, user_type=Type[PremiumUser], user=premium_user)
 
 
 async def get_avg_speed():
@@ -94,16 +144,12 @@ async def get_avg_speed():
     return avg_speed
 
 
-async def force_high_avg_speed(session, average_download_speed, minimum_allowed_speed):
+async def force_high_avg_speed(session, average_download_speed):
     """
     Receives the current download speed, in case it is lower than MINIMUM_SPEED_ALLOWED we remove all free users
     :param session: The engine session object
-    :param minimum_allowed_speed: The minimum allowed speed from the env
     :param average_download_speed: The average download speed from the server
     """
-    total_count_of_users: int = get_users_count(session=session)
-    # TODO add the calculation using the current active members
-    # TODO ask snir to add sessions managing in the nodog - using the logout endpoint
     # ClientForceTimeout 3600  # Force logout after 1 hour
     # ClientIdleTimeout 300    # Logout after 5 minutes of inactivity
     if average_download_speed < minimum_allowed_speed:
@@ -143,6 +189,7 @@ async def remove_and_deauth_user(user, session, user_type: UserType):
         remove_user(user_token=user.token, session=session, user_type=user_type)
 
 
+@assert_server_speed
 async def add_free_user(token: str, session):
     """
     Receives a token of a new free user and adds it to the db

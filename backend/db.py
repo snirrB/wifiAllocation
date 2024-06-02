@@ -11,12 +11,13 @@ class PremiumUser(SQLModel, table=True):
     token: str | None = Field(default=None)
     password: str
     active: bool = Field(default=False)
+    login_time: datetime = Field(default=None)
     email: str = Field(unique=True)
 
 
 class FreeUser(SQLModel, table=True):
     token: str = Field(primary_key=True)
-    time_of_registration: datetime = Field(description="When the user has been registered")
+    login_time: datetime = Field(description="When the user has been registered")
 
 
 class IBasePremiumUser(SQLModel):
@@ -30,7 +31,7 @@ class IBaseFreeUser(SQLModel):
 
 
 class IFreeUserCreate(IBaseFreeUser, table=False):
-    time_of_registration: datetime = Field(default_factory=datetime.now)
+    login_time: datetime = Field(default_factory=datetime.now)
 
 
 class IFreeUserRead(IBaseFreeUser, table=False):

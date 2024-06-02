@@ -12,8 +12,9 @@ from starlette.responses import JSONResponse
 from backend.db import IFreeUserRead
 from backend.db_utils import create_db_healthcheck, IPremiumUserCreate, IPremiumUserRead, \
     remove_user, deactivate_premium_user_in_db
-from backend.server_utils import assert_valid_premium_user, get_no_dog_status, delete_expired_users, get_avg_speed, \
-    force_high_avg_speed, add_free_user, add_new_premium_user, network_speed_check, deauth_premium_user
+from backend.server_utils import assert_valid_premium_user, get_no_dog_status, delete_expired_free_users, get_avg_speed, \
+    force_high_avg_speed, add_free_user, add_new_premium_user, network_speed_check, deauth_premium_user, \
+    delete_expired_premium_users
 from backend.utils import logger, UserType
 
 no_dog_url = os.getenv("NO_DOG_URL")
@@ -40,31 +41,31 @@ async def startup_event():
     :return:
     """
     loop = asyncio.get_running_loop()
-    loop.create_task(set_avg_speed())
-    loop.create_task(remain_speed())
+    loop.create_task(remain_valid_speed())
     loop.create_task(delete_expired_users_background())
+    loop.create_task(delete_expired_premium_users_task())
 
 
-async def set_avg_speed():
+async def delete_expired_premium_users_task():
     """
-    Receive the average download speed from server
-    :return:
+    Deleting user who passed their session time
     """
-    global average_download_speed
-    average_download_speed = await get_avg_speed()
-    await asyncio.sleep(300)  # Wait for 5 minutes
+    session_duration = int(os.getenv("SESSION_DURATION_TIME"))
+    while True:
+        session = next(get_db())
+        logger.info("Starting delete expired premium user routine")
+        await delete_expired_premium_users(session=session, session_duration=session_duration)
+        await asyncio.sleep(300)  # Wait for 5 minutes
 
 
-async def remain_speed():
+async def remain_valid_speed():
     """
-    Attach the remain_high_speed function to the event loop
+    Ensures that the average speed in the server is valid.
     """
-    minimum_allowed_speed = os.getenv("MINIMUM_SPEED_ALLOWED")
     while True:
         await asyncio.sleep(600)  # Run every 10 minute
         session = next(get_db())
-        await force_high_avg_speed(session, average_download_speed=average_download_speed,
-                                   minimum_allowed_speed=minimum_allowed_speed)
+        await force_high_avg_speed(session, average_download_speed=get_avg_speed())
 
 
 async def delete_expired_users_background():
@@ -74,7 +75,7 @@ async def delete_expired_users_background():
     while True:
         await asyncio.sleep(60)  # Run every minute
         session = next(get_db())
-        await delete_expired_users(session)
+        await delete_expired_free_users(session)
 
 
 @app_route.get("/status")

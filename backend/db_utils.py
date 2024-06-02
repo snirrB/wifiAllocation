@@ -1,5 +1,6 @@
+import datetime
 import os
-from typing import Type
+from typing import Type, List
 
 from fastapi import HTTPException
 from passlib.context import CryptContext
@@ -63,7 +64,7 @@ async def create_db_healthcheck(session):
         return f"DB is not up, got an error: {e}"
 
 
-def add_new_premium_user_to_db(new_user: IPremiumUserCreate, session):
+def add_new_premium_user_to_db(new_user: IPremiumUserCreate, session) -> IPremiumUserRead:
     """
     Add a new premium user to the db
     :param new_user: The new user to add
@@ -138,7 +139,7 @@ def validate_user(pwd: str, email: str, session) -> bool:
     :param session: The engine session object
     :return: True if the pwd is identical else false
     """
-    user = session.exec(select(PremiumUser).where(PremiumUser.email == email))
+    user = session.exec(select(PremiumUser).where(PremiumUser.email == email)).first()
     if not user:
         raise HTTPException(status_code=400, detail=f"Non existing email: {email}")
     return verify_password(plain_password=pwd, hashed_password=user.password)
@@ -210,3 +211,16 @@ def get_users_count(session):
     premium_users_count: int = session.exec(select(PremiumUser).where(PremiumUser.active is True)).count()
     active_free_users_count: int = session.exec(select(FreeUser)).count()
     return premium_users_count + active_free_users_count
+
+
+def get_expired_premium_users(session, session_duration: int) -> List[PremiumUser]:
+    """
+    Return all premium user who passed their session time
+    :param session: The engine session object
+    :param session_duration: The session duration allowed
+    :return: A list of all expired premium users
+    """
+    expired_users: List[PremiumUser] = session.exec(
+        select(PremiumUser).where(
+            datetime.timedelta(session_duration) < datetime.datetime.now() - PremiumUser.login_time)).all()
+    return expired_users
