@@ -110,7 +110,7 @@ def remove_user(session, user_type: UserType, user_email: str = None, user_token
         session.commit()
         return user_model_read_mapping.get(user_type)(**user.dict())
     else:
-        logger.error(f"Could not find a email {user_email} in db")
+        logger.error(f"Could not find a email {user_email} in db or user_token: {user_token}")
         raise HTTPException(status_code=404, detail=f"Could not find a user with email {user_email} in db")
 
 
@@ -213,14 +213,16 @@ def get_users_count(session):
     return premium_users_count + active_free_users_count
 
 
-def get_expired_premium_users(session, session_duration: int) -> List[PremiumUser]:
+def get_expired_premium_users(session) -> List[PremiumUser]:
     """
     Return all premium user who passed their session time
     :param session: The engine session object
-    :param session_duration: The session duration allowed
     :return: A list of all expired premium users
     """
+    now = datetime.datetime.now()
     expired_users: List[PremiumUser] = session.exec(
         select(PremiumUser).where(
-            datetime.timedelta(session_duration) < datetime.datetime.now() - PremiumUser.login_time)).all()
+            now - PremiumUser.login_time > datetime.timedelta(hours=PremiumUser.premium_duration)
+        )).all()
+    logger.info(f"The expired users are: {expired_users}")
     return expired_users

@@ -38,7 +38,6 @@ def get_db():
 async def startup_event():
     """
     Adding the background tasks to run while the server is running
-    :return:
     """
     loop = asyncio.get_running_loop()
     loop.create_task(remain_valid_speed())
@@ -54,7 +53,7 @@ async def delete_expired_premium_users_task():
     while True:
         session = next(get_db())
         logger.info("Starting delete expired premium user routine")
-        await delete_expired_premium_users(session=session, session_duration=session_duration)
+        await delete_expired_premium_users(session=session)
         await asyncio.sleep(300)  # Wait for 5 minutes
 
 
@@ -102,7 +101,7 @@ async def logout_user(email: str, session=Depends(get_db)):
     return deauth_premium_user(token=user.token)
 
 
-@app_route.get("/login/premium/")
+@app_route.get("/login/premium/", response_model=IPremiumUserRead)
 async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
     """
     Receive a dict holding the data of a premium user trying to log in, assert that it is a valid user, and behave
@@ -146,3 +145,7 @@ async def create_new_free_user(token: str, session=Depends(get_db)):
     """
     res: Tuple[IFreeUserRead, JSONResponse] = await add_free_user(token=token, session=session)
     return JSONResponse(status_code=res[1].status_code, content=res[0].dict())
+
+
+# TODO add a status examination for backgroung check
+# TODO add an option for premium time

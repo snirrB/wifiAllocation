@@ -7,15 +7,23 @@ from sqlmodel import Field, SQLModel
 
 
 class PremiumUser(SQLModel, table=True):
+    """
+    PremiumUser table
+    """
     id: int | None = Field(primary_key=True, default=None)
     token: str | None = Field(default=None)
     password: str
     active: bool = Field(default=False)
-    login_time: datetime = Field(default=None)
+    login_time: datetime = Field(default=datetime.now())
     email: str = Field(unique=True)
+    # The duration of the access in hours, default set to 3
+    premium_duration: int = Field(default=3)
 
 
 class FreeUser(SQLModel, table=True):
+    """
+    FreeUser table
+    """
     token: str = Field(primary_key=True)
     login_time: datetime = Field(description="When the user has been registered")
 

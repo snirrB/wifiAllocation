@@ -29,10 +29,10 @@ def authenticate_user(token: str):
         return res
     except Exception as e:
         logger.error(f"Unable to authenticate another user, with error: {e}")
-        return JSONResponse(status_code=400, content="Unable to authenticate another user")
+        raise HTTPException(status_code=400, detail="Unable to authenticate another user")
 
 
-async def assert_server_speed(func):
+def assert_server_speed(func):
     """
     Asserts that the speed server is valid, in case it is not raises an exception
     """
@@ -60,7 +60,8 @@ async def handle_too_slow_speed(args, kwargs):
             return
     raise HTTPException(status_code=404, detail="There are too many users connected, try again later")
 
-#TODO combine both login of the premium user and the add of the premium user to one function
+
+# TODO combine both login of the premium user and the add of the premium user to one function
 
 
 @assert_server_speed
@@ -90,8 +91,8 @@ async def assert_valid_premium_user(user: IPremiumUserCreate, session):
     """
     if validate_user(pwd=user.password, email=user.email, session=session):
         logger.debug(f"A valid user logged in, auth user with no dog, email: {user['email']}")
-        response = authenticate_user(token=user["token"])
-        activate_premium_user_in_db(session=session, new_user=user)
+        response = authenticate_user(token=user.token)
+        return activate_premium_user_in_db(session=session, new_user=user)
     raise HTTPException(status_code=400, detail="invalid password or user name")
 
 
@@ -120,15 +121,13 @@ async def delete_expired_free_users(session):
     session.commit()
 
 
-async def delete_expired_premium_users(session, session_duration: int):
+async def delete_expired_premium_users(session):
     """
     Delete and de authenticate all premium users who passed their session time
     :param session: The engine session object
-    :param session_duration: The session duration from the env allowed for every premium user
     :return: A list of IPremiumUserRead object holding the users who have been removed
     """
-    expired_premium_users: List[PremiumUser] = get_expired_premium_users(session=session,
-                                                                         session_duration=session_duration)
+    expired_premium_users: List[PremiumUser] = get_expired_premium_users(session=session)
     for premium_user in expired_premium_users:
         logger.debug(f"The session of user: {premium_user.email} expired, about to un auth it")
         await remove_and_deauth_user(session=session, user_type=Type[PremiumUser], user=premium_user)
@@ -166,7 +165,6 @@ async def remove_all_free_users(session):
     logger.debug("About to de auth all free user due to low avg speed")
     for user in free_users:
         await remove_and_deauth_user(user=user, session=session, user_type=UserType.FREE)
-    session.commit()
 
 
 async def deauth_premium_user(token: str):
@@ -245,3 +243,23 @@ async def handle_auth_request(response, session, user_type: UserType, email: str
         remove_user(user_email=email, session=session, user_type=user_type, user_token=token)
         raise HTTPException(status_code=400, detail=f"Unable to auth a user, with error: {content}")
 # The server could not authenticate the new user, remove the free user from the db
+
+
+"""
+A user needs to register to the network
+after registration he will need to login to the system
+
+Registration page -
+A user should insert an email and a password, i expect you to deliver to me the following:
+    1. The token of the user (you get it from the nodog splash)
+    2. The email and the password of the user
+    3. Optional - the duration of the premium session the user has bought, default is 3 hours, meaning if the user has set a different duration time of the session pass me that.
+
+In the login page, i expect you to pass me only the email and the password of the user, i will return to you IPremiumUserRead object, check the github to look at that object.
+
+A premium user should have an endpoint of logout, in the logout i expect to receive the email or the token of the user, you can pass me both.
+
+Free user:
+A free user should have an endpoint of login, in the scenario i expect to receive only the token of the user,
+in this case i will respond to you with a IFreeUserRead object, check the github for the object.
+"""
