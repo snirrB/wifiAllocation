@@ -4,6 +4,7 @@ from typing import Type, List
 
 from fastapi import HTTPException
 from passlib.context import CryptContext
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
@@ -222,7 +223,8 @@ def get_expired_premium_users(session) -> List[PremiumUser]:
     now = datetime.datetime.now()
     expired_users: List[PremiumUser] = session.exec(
         select(PremiumUser).where(
-            now - PremiumUser.login_time > datetime.timedelta(hours=PremiumUser.premium_duration)
-        )).all()
+            func.datetime('now') > func.datetime(PremiumUser.login_time, f"+{PremiumUser.premium_duration} hours")
+        )
+    ).all()
     logger.info(f"The expired users are: {expired_users}")
     return expired_users

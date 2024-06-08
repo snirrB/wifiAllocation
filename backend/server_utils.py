@@ -243,23 +243,3 @@ async def handle_auth_request(response, session, user_type: UserType, email: str
         remove_user(user_email=email, session=session, user_type=user_type, user_token=token)
         raise HTTPException(status_code=400, detail=f"Unable to auth a user, with error: {content}")
 # The server could not authenticate the new user, remove the free user from the db
-
-
-"""
-A user needs to register to the network
-after registration he will need to login to the system
-
-Registration page -
-A user should insert an email and a password, i expect you to deliver to me the following:
-    1. The token of the user (you get it from the nodog splash)
-    2. The email and the password of the user
-    3. Optional - the duration of the premium session the user has bought, default is 3 hours, meaning if the user has set a different duration time of the session pass me that.
-
-In the login page, i expect you to pass me only the email and the password of the user, i will return to you IPremiumUserRead object, check the github to look at that object.
-
-A premium user should have an endpoint of logout, in the logout i expect to receive the email or the token of the user, you can pass me both.
-
-Free user:
-A free user should have an endpoint of login, in the scenario i expect to receive only the token of the user,
-in this case i will respond to you with a IFreeUserRead object, check the github for the object.
-"""

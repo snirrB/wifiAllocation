@@ -49,7 +49,6 @@ async def delete_expired_premium_users_task():
     """
     Deleting user who passed their session time
     """
-    session_duration = int(os.getenv("SESSION_DURATION_TIME"))
     while True:
         session = next(get_db())
         logger.info("Starting delete expired premium user routine")
@@ -114,7 +113,7 @@ async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
     return await assert_valid_premium_user(user=user, session=session)
 
 
-@db_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str])
+@app_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str])
 @network_speed_check(average_download_speed=average_download_speed)
 async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
     """
