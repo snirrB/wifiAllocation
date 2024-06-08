@@ -8,8 +8,8 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
-from backend.db import PremiumUser, IPremiumUserCreate, IPremiumUserRead, IFreeUserCreate, FreeUser, IFreeUserRead
-from backend.utils import logger, UserType
+from db import PremiumUser, IPremiumUserCreate, IPremiumUserRead, IFreeUserCreate, FreeUser, IFreeUserRead
+from utils import logger, UserType
 
 no_dog_url = os.getenv("NO_DOG_URL")
 
@@ -228,3 +228,23 @@ def get_expired_premium_users(session) -> List[PremiumUser]:
     ).all()
     logger.info(f"The expired users are: {expired_users}")
     return expired_users
+
+
+def get_premium_user(token: str, session):
+    """
+    Receives a token and a session and returns the IPremiumUser object referencing to that token
+    """
+    logger.debug(f"Receives a query to get premium user with token: {token}")
+    return session.exec(
+        select(PremiumUser).where(
+            PremiumUser.token == token)).first()
+    
+
+def get_free_user(token: str, session):
+    """
+    Receives a token and a session and returns the FreeUser object referencing to that token
+    """
+    logger.debug(f"Receives a query to get free user with token: {token}")
+    return session.exec(
+        select(FreeUser).where(
+            PremiumUser.token == token)).first()

@@ -6,15 +6,16 @@ from typing import Type, List
 import requests
 from fastapi import HTTPException
 from sqlmodel import select
+from sqlalchemy import func
 from starlette.responses import JSONResponse
-
-from backend.db import FreeUser, IFreeUserRead, IPremiumUserRead, IPremiumUserCreate, PremiumUser
-from backend.db_utils import validate_user, add_new_free_user_to_db, remove_user, add_new_premium_user_to_db, \
-    activate_premium_user_in_db, get_expired_premium_users
-from backend.utils import logger, no_dog_url, UserType
+import json
+from db import FreeUser, IFreeUserRead, IPremiumUserRead, IPremiumUserCreate, PremiumUser
+from db_utils import validate_user, add_new_free_user_to_db, remove_user, add_new_premium_user_to_db, \
+    activate_premium_user_in_db, get_expired_premium_users, get_premium_user, get_free_user
+from utils import logger, no_dog_url, UserType, user_status, serialize_td
 
 minimum_allowed_speed = os.getenv("MINIMUM_SPEED_ALLOWED")
-
+free_user_allowed_session = os.getenv("FREE_USER_SESSION_ALLOWED")
 
 def authenticate_user(token: str):
     """
@@ -39,8 +40,8 @@ def assert_server_speed(func):
 
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        current_speed = await get_avg_speed()
-        if int(current_speed) < int(minimum_allowed_speed):
+        current_speed = await get_current_speed()
+        if float(current_speed) < float(minimum_allowed_speed):
             await handle_too_slow_speed(*args, **kwargs, current_speed=current_speed)
         return await func(*args, **kwargs)
 
@@ -103,7 +104,7 @@ async def get_no_dog_status():
     """
     try:
         resp = requests.get(f"{no_dog_url}/status")
-        return resp
+        return resp.status_code
     except Exception:
         return {"status": "Can not connect to the no dog, check the no dog service"}
 
@@ -113,7 +114,7 @@ async def delete_expired_free_users(session):
     Gets all free users who were connected for more than 3 minutes and disconnect them, delete them from db as well
     :param session: The engine session object
     """
-    expiration_time = datetime.now() - timedelta(minutes=5)
+    expiration_time = datetime.now() - timedelta(minutes=int(os.getenv("FREE_USER_SESSION_ALLOWED")))
     expired_users = session.exec(select(FreeUser).where(FreeUser.login_time < expiration_time)).all()
     for user in expired_users:
         logger.debug(f"Found free user to delete: {user.token}")
@@ -133,12 +134,21 @@ async def delete_expired_premium_users(session):
         await remove_and_deauth_user(session=session, user_type=Type[PremiumUser], user=premium_user)
 
 
+async def get_current_speed():
+    """
+    :return: The last 5 min speed from the server
+    """
+    res = requests.get(f"{no_dog_url}/lastFiveMinAvgSpeed")
+    avg_speed = json.loads(res.content.decode())["message"]
+    logger.debug(f"Got current speed from server: {avg_speed}")
+    return avg_speed
+
 async def get_avg_speed():
     """
-    :return: The average speed receive from the server
+    Returns the avg speed of the server
     """
     res = requests.get(f"{no_dog_url}/getTotalUsageAndAvgSpeed")
-    avg_speed = dict(res.content)["message"]["avg_download_speed"]
+    avg_speed = json.loads(res.content.decode())["message"]["avg_download_speed"]
     logger.debug(f"Got average speed from server: {avg_speed}")
     return avg_speed
 
@@ -216,7 +226,7 @@ def network_speed_check(average_download_speed: float):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            if average_download_speed < float(os.getenv("MINIMUM_DOWNLOAD_SPEED")):
+            if average_download_speed < float(os.getenv("MINIMUM_SPEED_ALLOWED")):
                 logger.info(
                     f"There are too many users in the network, unable to add another user,"
                     f" avg_speed: {average_download_speed}")
@@ -238,8 +248,44 @@ async def handle_auth_request(response, session, user_type: UserType, email: str
     :param user_type: The type of the user to be removed
     """
     if response.status_code != 200:
-        content: str = response.body.decode()
+        content: str = response.content.decode()
         logger.error(f"NoDog failed to auth a user, now removing from db, error: {content}")
         remove_user(user_email=email, session=session, user_type=user_type, user_token=token)
         raise HTTPException(status_code=400, detail=f"Unable to auth a user, with error: {content}")
 # The server could not authenticate the new user, remove the free user from the db
+
+async def get_current_status(token: str, session):
+    """
+    Gets a token and return the current status of the user
+    """
+    premium_user = get_premium_user(token=token, session=session)
+    if premium_user:
+        return await premium_user_status(premium_user=premium_user)
+    free_user = get_free_user(token=token, session=session)
+    if free_user:
+        return await free_user_status(free_user=free_user)
+    else:
+        raise HTTPException(status_code=405, detail="Unable to get current status for user, no such user found in db")
+
+
+async def premium_user_status(premium_user:PremiumUser) -> user_status:
+    """
+    Return a premium user status response containing the status of the current premium user
+    """
+    current_speed = await get_current_speed()
+    current_time = datetime.now()
+    expiration_time = premium_user.login_time + timedelta(hours=premium_user.premium_duration)
+    time_remaining = expiration_time - current_time
+    time_remaining: dict = serialize_td(td=time_remaining)
+    return user_status(time_remaimning=time_remaining,
+                        login_time=premium_user.login_time.isoformat(),  current_speed=current_speed)
+
+async def free_user_status(free_user: FreeUser, session):
+    """
+    Return a premium user status response containing the status of the current premium user
+    """
+    current_speed = await get_current_speed()
+    current_time = datetime.now()
+    expiration_time = free_user.login_time + timedelta(minutes=os.getenv("SESSION_DURATION_TIME"))
+    time_remaining = expiration_time - current_time
+    return user_status(time_remaimning=time_remaining, current_speed=current_speed, login_time=free_user.login_time.isoformat())

@@ -9,13 +9,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 from starlette.responses import JSONResponse
 
-from backend.db import IFreeUserRead
-from backend.db_utils import create_db_healthcheck, IPremiumUserCreate, IPremiumUserRead, \
+from db import IFreeUserRead
+from db_utils import create_db_healthcheck, IPremiumUserCreate, IPremiumUserRead, \
     remove_user, deactivate_premium_user_in_db
-from backend.server_utils import assert_valid_premium_user, get_no_dog_status, delete_expired_free_users, get_avg_speed, \
+from server_utils import assert_valid_premium_user, get_no_dog_status, delete_expired_free_users, get_current_speed, \
     force_high_avg_speed, add_free_user, add_new_premium_user, network_speed_check, deauth_premium_user, \
-    delete_expired_premium_users
-from backend.utils import logger, UserType
+    delete_expired_premium_users, get_current_status, get_avg_speed
+from utils import logger, UserType, user_status
 
 no_dog_url = os.getenv("NO_DOG_URL")
 sqlite_url = os.getenv("SQLITE_URL_PREFIX") + os.getenv("SQLITE_FILE_NAME")
@@ -63,7 +63,7 @@ async def remain_valid_speed():
     while True:
         await asyncio.sleep(600)  # Run every 10 minute
         session = next(get_db())
-        await force_high_avg_speed(session, average_download_speed=get_avg_speed())
+        await force_high_avg_speed(session, average_download_speed=get_current_speed())
 
 
 async def delete_expired_users_background():
@@ -125,7 +125,7 @@ async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
     logger.debug(f"About to add a new user to db {user_to_add}")
     new_user = IPremiumUserCreate(**user_to_add["user_to_add"])
     resp = await add_new_premium_user(new_user=new_user, session=session)
-    return JSONResponse(status_code=200, content=resp)
+    return JSONResponse(status_code=200, content=resp.dict())
 
 
 @db_route.delete("/delete_premium_user")
@@ -134,7 +134,7 @@ async def delete_premium_user(user: dict, session=Depends(get_db)):
     return JSONResponse(status_code=200, content=res)
 
 
-@db_route.post("/login/free")
+@app_route.post("/login/free/")
 @network_speed_check(average_download_speed=average_download_speed)
 async def create_new_free_user(token: str, session=Depends(get_db)):
     """
@@ -145,6 +145,20 @@ async def create_new_free_user(token: str, session=Depends(get_db)):
     res: Tuple[IFreeUserRead, JSONResponse] = await add_free_user(token=token, session=session)
     return JSONResponse(status_code=res[1].status_code, content=res[0].dict())
 
-
+@app_route.get("/user_status")
+async def get_user_status(token: str, session=Depends(get_db)):
+    """
+    Get current status for a user
+    """
+    res: user_status = await get_current_status(token=token, session=session)
+    return JSONResponse(status_code=200, content=res.dict())
 # TODO add a status examination for backgroung check
 # TODO add an option for premium time
+
+@app_route.get("total_avg_spd")
+async def get_server_avg_speed():
+    """
+    Return the average speed of the server 
+    """
+    res = get_avg_speed()
+    return JSONResponse(status_code=200, content=f"Average speed is {res}")
