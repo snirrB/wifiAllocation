@@ -18,7 +18,8 @@ from server_utils import assert_valid_premium_user, get_no_dog_status, delete_ex
 from utils import logger, UserType, user_status
 
 no_dog_url = os.getenv("NO_DOG_URL")
-sqlite_url = os.getenv("SQLITE_URL_PREFIX") + os.getenv("SQLITE_FILE_NAME")
+sqlite_url = "sqlite:///database.db"
+#sqlite_url = os.getenv("SQLITE_URL_PREFIX") + os.getenv("SQLITE_FILE_NAME")
 engine = create_engine(sqlite_url, echo=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 app_route = APIRouter()
@@ -134,7 +135,7 @@ async def delete_premium_user(user: dict, session=Depends(get_db)):
     return JSONResponse(status_code=200, content=res)
 
 
-@app_route.post("/login/free/")
+@app_route.get("/login/free/")
 @network_speed_check(average_download_speed=average_download_speed)
 async def create_new_free_user(token: str, session=Depends(get_db)):
     """

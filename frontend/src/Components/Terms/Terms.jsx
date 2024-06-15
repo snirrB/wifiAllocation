@@ -1,13 +1,13 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import "./Terms.css";
-import { loginService } from "../../Services/login.service";
+import { loginService } from "../../Services/api";
 
 const Terms = () => {
   const navigate = useNavigate();
 
   const handleApprove = async () => {
-    const token = "123456789";
+    const token = "1234";
     const result = await loginService.createFreeUser(token);
     console.log("result", result);
     navigate("/status", { state: { isPremium: false } });

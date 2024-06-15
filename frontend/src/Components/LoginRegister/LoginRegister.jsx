@@ -8,14 +8,7 @@ import {
   FaKey,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-// import axios from "axios";
-import { loginService } from "../../Services/login.service";
-//import { BASE_URL } from "../../Services/utils";
-
-// export const loginService = {
-//   login,
-//   register,
-// };
+import { loginService } from "../../Services/api";
 
 const LoginRegister = () => {
   const [action, setAction] = useState("");
@@ -75,7 +68,6 @@ const LoginRegister = () => {
       <div className="form-box login">
         <form onSubmit={handleLogin}>
           <h1>Login</h1>
-          <button onClick={loginService.hello}>HELLO</button>
           <div className="input-box">
             <input
               type="email"
