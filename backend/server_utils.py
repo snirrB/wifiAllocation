@@ -263,7 +263,7 @@ async def get_current_status(token: str, session):
         return await premium_user_status(premium_user=premium_user)
     free_user = get_free_user(token=token, session=session)
     if free_user:
-        return await free_user_status(free_user=free_user)
+        return await free_user_status(free_user=free_user, session=session)
     else:
         raise HTTPException(status_code=405, detail="Unable to get current status for user, no such user found in db")
 
@@ -286,6 +286,8 @@ async def free_user_status(free_user: FreeUser, session):
     """
     current_speed = await get_current_speed()
     current_time = datetime.now()
-    expiration_time = free_user.login_time + timedelta(minutes=os.getenv("SESSION_DURATION_TIME"))
+    expiration_time = free_user.login_time + timedelta(minutes=int(os.getenv("SESSION_DURATION_TIME")))
     time_remaining = expiration_time - current_time
-    return user_status(time_remaimning=time_remaining, current_speed=current_speed, login_time=free_user.login_time.isoformat())
+    time_remaining: dict = serialize_td(td=time_remaining)
+    return user_status(time_remaimning=time_remaining,
+                        login_time=free_user.login_time.isoformat(),  current_speed=current_speed)

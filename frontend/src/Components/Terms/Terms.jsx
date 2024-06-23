@@ -7,7 +7,7 @@ const Terms = () => {
   const navigate = useNavigate();
 
   const handleApprove = async () => {
-    const token = "1234";
+    const token = "be3e4d99";
     const result = await loginService.createFreeUser(token);
     console.log("result", result);
     navigate("/status", { state: { isPremium: false } });

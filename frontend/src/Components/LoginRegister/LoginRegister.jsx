@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState /*, useEffect*/ } from "react";
 import "./LoginRegister.css";
 import {
   FaUser,
@@ -9,6 +9,8 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { loginService } from "../../Services/api";
+//import { NODOG_URL } from "../../Services/utils";
+//import axios from "axios";
 
 const LoginRegister = () => {
   const [action, setAction] = useState("");
@@ -19,6 +21,14 @@ const LoginRegister = () => {
   const [expirationDate, setExpirationDate] = useState("");
   const [cvv, setCvv] = useState("");
   const navigate = useNavigate();
+
+  // useEffect(() => {
+  //   async function getTokenNODOG() {
+  //     const result = await axios.get(`${NODOG_URL}/clients`);
+  //     console.log("result" , result);
+  //   }
+  //   getTokenNODOG();
+  // }, []); 
 
   const registerLink = () => {
     setAction(" active");
@@ -36,26 +46,20 @@ const LoginRegister = () => {
   const handleRegister = async (e) => {
     e.preventDefault();
     try {
-      const response = await loginService.register(email, password);
-      console.log("User registered:", response);
-      alert("User registered successfully!");
-      navigate("/status", { state: { isPremium: true } });
+        const result = await loginService.register(email, password, "30f167e3");
+        console.log('Registration successful', result);
     } catch (error) {
-      console.error("Error registering user:", error.response.data);
-      alert("Error registering user.");
+        console.error('Registration failed', error);
     }
-  };
+};
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await loginService.login(email, password);
-      console.log("User logged in:", response);
-      alert("User logged in successfully!");
+    e.preventDefault();    try {
+      const result = await loginService.login(email, password, "30f167e3");
+      console.log("User logged in:", result);
       navigate("/status", { state: { isPremium: true } });
     } catch (error) {
       console.error("Error logging in user:", error.response.data);
-      alert("Error logging in user.");
     }
   };
 

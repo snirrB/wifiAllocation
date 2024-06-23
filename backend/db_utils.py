@@ -247,4 +247,4 @@ def get_free_user(token: str, session):
     logger.debug(f"Receives a query to get free user with token: {token}")
     return session.exec(
         select(FreeUser).where(
-            PremiumUser.token == token)).first()
+            FreeUser.token == token)).first()

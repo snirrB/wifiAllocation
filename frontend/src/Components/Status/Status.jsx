@@ -1,95 +1,47 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "./Status.css";
 import { dataService } from "../../Services/api";
+import "./Status.css";
 
 const Status = () => {
   const navigate = useNavigate();
-  const [status, setStatus] = useState(undefined);
-  const [count, setCount] = useState(-1);
+  const [statusData, setStatusData] = useState(null);
+  const token = "be3e4d99";
 
-  const getStatus = async () => {
-    return await dataService.getStatus();
-  };
+  useEffect(() => {
+    dataService.getStatus(token)
+        .then(data => setStatusData(data))
+        .catch(error => console.error('Error fetching status:', error));
+}, [token]);
 
   const handleLogout = () => {
     // Handle logout logic here
     navigate("/");
   };
 
-  // const counter = () => {};
+if (!statusData) {
+  return <div>Loading...</div>;
+}
 
-  const formatTime = (milliseconds) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
-    const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(
-      2,
-      "0"
-    );
-    const seconds = String(totalSeconds % 60).padStart(2, "0");
-    return `${hours}:${minutes}:${seconds}`;
-  };
+const loginTime = statusData.login_time ? new Date(statusData.login_time).toLocaleString() : 'N/A';
+const timeRemaining = statusData.time_remaining 
+? Object.entries(statusData.time_remaining).map(([unit, value]) => `${value} ${unit}`).join(', ')
+: 'N/A';
+const currentSpeed = statusData.current_speed !== undefined ? `${statusData.current_speed} Mbps` : 'N/A';
 
-  useEffect(() => {
-    getStatus().then((val) => {
-      setStatus(val);
-      setCount(val.time_remaimning);
-    });
-  }, []);
-  useEffect(() => {
-    if (count === undefined) return;
-    const timer = setInterval(() => {
-      setCount((prevCount) => {
-        if (prevCount <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prevCount - 1000;
-      });
-    }, 1000);
-
-    // Cleanup the interval on component unmount
-    return () => clearInterval(timer);
-  }, [count]);
-
-  const sectionStyle = {
-    display: "flex",
-    flexDirection: "row",
-    gap: "10px",
-  };
-  return (
-    <div className="status-wrapper">
+return (
+  <div className="status-wrapper">
       <div className="status-box">
-        {!!status && (
-          <>
-            {status.isPremium && (
-              <button className="logout-button" onClick={handleLogout}>
-                Logout
-              </button>
-            )}
-            <h1>Status</h1>
-            <section style={sectionStyle}>
-              <h4>User:</h4>
-              <p>
-                {status.name}
-                {status.isPremium && <b>(Premium)</b>}
-              </p>
-            </section>
-            {count > -1 && (
-              <section style={sectionStyle}>
-                <h4>Time until logout:</h4>
-                <p>{formatTime(count)}</p>
-              </section>
-            )}
-            <section style={sectionStyle}>
-              <h4>Network speed:</h4>
-              <p>{status.current_speed} MB / sec</p>
-            </section>
-          </>
-        )}
+          <h1>Status Page</h1>
+          <button className="logout-button" onClick={handleLogout}>
+              Logout
+           </button>
+          <p>Login Time: {loginTime}</p>
+          <p>Time Remaining: {timeRemaining}</p>
+          <p>Current Speed: {currentSpeed} </p>
       </div>
-    </div>
-  );
+  </div>
+);
 };
 
 export default Status;
