@@ -1,0 +1,13 @@
+.mute-unmute {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: -10px;
+  > p {
+    font-size: small;
+    margin: 0;
+  }
+}

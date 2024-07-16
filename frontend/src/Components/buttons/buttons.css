@@ -1,0 +1,22 @@
+.back-button {
+  /* border: solid 1px rgb(24, 51, 82); */
+  color: rgb(31, 99, 176);
+  /* box-shadow: 0 0 5px 2px rgba(255, 255, 255, 0); */
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 15px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+
+.back-button:hover {
+  /* box-shadow: 0 0 5px 2px rgba(28, 87, 155, 0.804); */
+  background-color: rgba(101, 173, 255, 0.215);
+}
+
+.reverse-hor {
+  transform: scaleX(-1);
+}
