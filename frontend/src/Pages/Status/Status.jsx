@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiService } from "../../Services/api";
-import { LogoutButton } from "./../../components/buttons/buttons";
+import { LogoutButton } from "./../../Components/buttons/buttons";
 import "./Status.css";
 
 const Status = () => {

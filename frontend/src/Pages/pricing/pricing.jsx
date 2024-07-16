@@ -5,7 +5,7 @@ import { FaWifi, FaBolt, FaCrown } from "react-icons/fa";
 
 import "../../styles/page.css";
 import "./pricing.css";
-import { BackButton } from "../../components/buttons/buttons";
+import { BackButton } from "../../Components/buttons/buttons";
 
 const PricingPlanContainer = ({ plan }) => {
   const navigate = useNavigate();

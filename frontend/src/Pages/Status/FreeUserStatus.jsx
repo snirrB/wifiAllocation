@@ -6,9 +6,9 @@ import { FaArrowRight } from "react-icons/fa";
 import "../../styles/page.css";
 import "./Status.css";
 
-import { BackButton } from "../../components/buttons/buttons";
+import { BackButton } from "../../Components/buttons/buttons";
 import Status from "./Status";
-import VideoAdvertisement from "../../components/advertisement/ad";
+import VideoAdvertisement from "../../Components/advertisement/ad";
 
 const FreeUserStatus = () => {
   const location = useLocation();

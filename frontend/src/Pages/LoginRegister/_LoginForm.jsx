@@ -10,7 +10,7 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { apiService } from "../../Services/api";
-import { QRPopup } from "../../components/QR/QRPopUp";
+import { QRPopup } from "../../Components/QR/QRPopUp";
 
 export const LoginForm = ({ handleLogin, handleGuest, registerLink }) => {
   const [email, setEmail] = useState("");
