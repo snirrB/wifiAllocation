@@ -1,7 +1,13 @@
+import { HTTP } from "./utils";
+
 /* STATUSES */
+
+const http = new HTTP();
 
 async function status() {
   // send here
+  const res = await http.get("/user_status");
+  console.log(res);
   const no_dog_resp = 0;
   const sql_resp = "DB is up and ready";
   const result = { "no dog status": no_dog_resp, db_status: sql_resp };
