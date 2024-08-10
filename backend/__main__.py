@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
 
 import uvicorn
@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 dotenv_path = Path('/home/pi/wifiAllocation/backend/.env')
 load_dotenv(dotenv_path=dotenv_path)
-
+env_vars = dotenv_values(dotenv_path)
 app = FastAPI()
 origins = [
     "http://localhost",

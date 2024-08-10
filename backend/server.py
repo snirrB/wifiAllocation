@@ -34,15 +34,15 @@ def get_db():
         yield session
 
 
-@app_route.on_event("startup")
-async def startup_event():
-    """
-    Adding the background tasks to run while the server is running
-    """
-    loop = asyncio.get_running_loop()
-    loop.create_task(remain_valid_speed())
-    loop.create_task(delete_expired_users_background())
-    loop.create_task(delete_expired_premium_users_task())
+# @app_route.on_event("startup")
+# async def startup_event():
+#     """
+#     Adding the background tasks to run while the server is running
+#     """
+    # loop = asyncio.get_running_loop()
+    # loop.create_task(remain_valid_speed())
+    # loop.create_task(delete_expired_users_background())
+    # loop.create_task(delete_expired_premium_users_task())
 
 
 async def delete_expired_premium_users_task():
@@ -100,7 +100,7 @@ async def logout_user(email: str, session=Depends(get_db)):
     return deauth_premium_user(token=user.token)
 
 
-@app_route.get("/login/premium/", response_model=IPremiumUserRead)
+@app_route.post("/login/premium/", response_model=IPremiumUserRead)
 async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
     """
     Receive a dict holding the data of a premium user trying to log in, assert that it is a valid user, and behave
@@ -114,7 +114,7 @@ async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
 
 
 @app_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str])
-@network_speed_check(average_download_speed=average_download_speed)
+#@network_speed_check(average_download_speed=average_download_speed)
 async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
     """
     Receive the details of a new user and add it to the db
@@ -134,7 +134,7 @@ async def delete_premium_user(user: dict, session=Depends(get_db)):
     return JSONResponse(status_code=200, content=res)
 
 
-@app_route.get("/login/free/")
+@app_route.post("/login/free/")
 @network_speed_check(average_download_speed=average_download_speed)
 async def create_new_free_user(token: str, session=Depends(get_db)):
     """

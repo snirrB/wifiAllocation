@@ -65,7 +65,7 @@ async def handle_too_slow_speed(args, kwargs):
 # TODO combine both login of the premium user and the add of the premium user to one function
 
 
-@assert_server_speed
+#@assert_server_speed
 async def add_new_premium_user(new_user, session, premium_user: bool = True) -> IPremiumUserRead:
     """
     Add a new premium user object
@@ -192,7 +192,7 @@ async def remove_and_deauth_user(user, session, user_type: UserType):
     :param user_type: The type of the user to be deleted
     :param session: The engine session object
     """
-    res = requests.get(f"{no_dog_url}/deauth/{user.token}")
+    res = requests.get(f"localhost:8083/deauth/{user.token}")
     if res.status_code == 200:
         remove_user(user_token=user.token, session=session, user_type=user_type)
 
