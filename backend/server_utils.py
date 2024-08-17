@@ -91,7 +91,7 @@ async def assert_valid_premium_user(user: IPremiumUserCreate, session):
     :return: IPremiumUserRead holding the data of the user
     """
     if validate_user(pwd=user.password, email=user.email, session=session):
-        logger.debug(f"A valid user logged in, auth user with no dog, email: {user['email']}")
+        logger.debug(f"A valid user logged in, auth user with no dog, email: {user.email}")
         response = authenticate_user(token=user.token)
         return activate_premium_user_in_db(session=session, new_user=user)
     raise HTTPException(status_code=400, detail="invalid password or user name")

@@ -27,7 +27,7 @@ def get_password_hash(password: str) -> str:
     """
     logger.debug("Hashing a new password")
     # Create the hash using the secret key
-    pwd = pwd_context.hash(password + secret_key)
+    pwd = pwd_context.hash(password)
     return pwd
 
 
@@ -176,7 +176,7 @@ def activate_premium_user_in_db(session, new_user: IPremiumUserCreate):
     :param session: The engine session object
     :param new_user: IPremiumUserCreate object holding the details of the user
     """
-    user: PremiumUser | None = session.exec(select(PremiumUser).where(PremiumUser.email == new_user.email))
+    user: PremiumUser | None = session.exec(select(PremiumUser).where(PremiumUser.email == new_user.email)).first()
     if user:
         user.active = True
         user.token = new_user.token
