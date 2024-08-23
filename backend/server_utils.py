@@ -62,8 +62,6 @@ async def handle_too_slow_speed(args, kwargs):
     raise HTTPException(status_code=404, detail="There are too many users connected, try again later")
 
 
-# TODO combine both login of the premium user and the add of the premium user to one function
-
 
 #@assert_server_speed
 async def add_new_premium_user(new_user, session, premium_user: bool = True) -> IPremiumUserRead:

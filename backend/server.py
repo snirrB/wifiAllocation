@@ -2,6 +2,8 @@ import asyncio
 import os
 from typing import Union, Tuple
 
+import qrcode
+from PIL import Image
 from fastapi import APIRouter
 from fastapi import Depends
 from sqlalchemy import create_engine
@@ -9,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 from starlette.responses import JSONResponse
 
+from backend.models import UserToAddSchema
 from db import IFreeUserRead
 from db_utils import create_db_healthcheck, IPremiumUserCreate, IPremiumUserRead, \
     remove_user, deactivate_premium_user_in_db
@@ -39,10 +42,10 @@ def get_db():
 #     """
 #     Adding the background tasks to run while the server is running
 #     """
-    # loop = asyncio.get_running_loop()
-    # loop.create_task(remain_valid_speed())
-    # loop.create_task(delete_expired_users_background())
-    # loop.create_task(delete_expired_premium_users_task())
+# loop = asyncio.get_running_loop()
+# loop.create_task(remain_valid_speed())
+# loop.create_task(delete_expired_users_background())
+# loop.create_task(delete_expired_premium_users_task())
 
 
 async def delete_expired_premium_users_task():
@@ -113,9 +116,10 @@ async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
     return await assert_valid_premium_user(user=user, session=session)
 
 
-@app_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str])
-#@network_speed_check(average_download_speed=average_download_speed)
-async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
+@app_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str], summary="Create a new premium user",
+                description="This endpoint creates a new premium user in the db and authenticate it")
+# @network_speed_check(average_download_speed=average_download_speed)
+async def add_premium_user(user_to_add: UserToAddSchema, session=Depends(get_db)):
     """
     Receive the details of a new user and add it to the db
     :param user_to_add: IUserCreate schema holding a user to add
@@ -123,7 +127,7 @@ async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
     :return: IUserRead object holding the details of the new created user
     """
     logger.debug(f"About to add a new user to db {user_to_add}")
-    new_user = IPremiumUserCreate(**user_to_add["user_to_add"])
+    new_user = IPremiumUserCreate(**user_to_add.dict())
     resp = await add_new_premium_user(new_user=new_user, session=session)
     return JSONResponse(status_code=200, content=resp.dict())
 
@@ -145,6 +149,7 @@ async def create_new_free_user(token: str, session=Depends(get_db)):
     res: Tuple[IFreeUserRead, JSONResponse] = await add_free_user(token=token, session=session)
     return JSONResponse(status_code=res[1].status_code, content=res[0].dict())
 
+
 @app_route.get("/user_status")
 async def get_user_status(token: str, session=Depends(get_db)):
     """
@@ -152,8 +157,7 @@ async def get_user_status(token: str, session=Depends(get_db)):
     """
     res: user_status = await get_current_status(token=token, session=session)
     return JSONResponse(status_code=200, content=res.dict())
-# TODO add a status examination for backgroung check
-# TODO add an option for premium time
+
 
 @app_route.get("total_avg_spd")
 async def get_server_avg_speed():
@@ -162,3 +166,23 @@ async def get_server_avg_speed():
     """
     res = get_avg_speed()
     return JSONResponse(status_code=200, content=f"Average speed is {res}")
+
+@app_route.get("/test")
+async def genereate_qr():
+    """
+    Generates a new qr user to be available for a usage
+    :return: QR image to be scanned
+    """
+    qr = qrcode.QRCode(
+        version=1,  # controls the size of the QR Code
+        error_correction=qrcode.constants.ERROR_CORRECT_L,  # error correction level
+        box_size=10,  # size of each box in pixels
+        border=4,  # thickness of the border (in boxes)
+    )
+    qr.add_data(os.getenv("QR_URL"))
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    img = img.convert("RGB")
+    img.show()
+
+# TODO: Add the logic that add the new user with the token to its table and activates it in case
