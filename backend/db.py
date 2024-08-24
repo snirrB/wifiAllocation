@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from email_validator import validate_email
-from pydantic import field_validator
+from pydantic import validator
 from sqlmodel import Field, SQLModel
 
 
@@ -17,7 +17,7 @@ class PremiumUser(SQLModel, table=True):
     login_time: datetime = Field(default=datetime.now())
     email: str = Field(unique=True)
     # The duration of the access in hours, default set to 3
-    premium_duration: int = Field(default=3)
+    premium_duration: int = Field(default=1)
 
 
 class FreeUser(SQLModel, table=True):
@@ -32,6 +32,8 @@ class IBasePremiumUser(SQLModel):
     id: Optional[int] = None
     token: Optional[str]
     email: str
+    # This is the pricing value for the access duration of the user to the wifi
+    premium_duration: int = 1
 
 
 class IBaseFreeUser(SQLModel):
@@ -56,8 +58,7 @@ class IPremiumUserCreate(IBasePremiumUser, table=False):
     """
     password: str
 
-    @field_validator('email')
-    @classmethod
+    @validator('email')
     def validate_email(cls, v: str):
         """
         validate the email address is a valid address
@@ -73,3 +74,28 @@ class IPremiumUserRead(IBasePremiumUser, table=False):
     """
     token: str
     email: str
+
+
+class QRUser(SQLModel, table=True):
+    """
+    QR users table
+    """
+    id: int | None = Field(primary_key=True, default=None)
+    generation_time: datetime = Field(default_factory=datetime.now)
+    active: bool = Field(default=False)
+    qr_token: str = Field(unique=True)
+
+
+class IQRUserCreate(SQLModel):
+    """
+    Class representing the qr user for the creation
+    """
+    qr_token: str
+
+
+class IQRUserRead(SQLModel):
+    """
+    Class representing the read qr user object
+    """
+    qr_token: str
+    generation_time: datetime

@@ -19,6 +19,8 @@ passlib = "^1.7.4"
 sqlmodel = "^0.0.19"
 pydantic = "1.10.15"
 load-dotenv = "^0.1.0"
+qrcode = "^7.4.2"
+pillow = "^10.4.0"
 
 
 [build-system]

@@ -9,12 +9,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 from starlette.responses import JSONResponse
 
-from db import IFreeUserRead
+from backend.models import UserToAddSchema
+from db import IFreeUserRead, IQRUserRead
 from db_utils import create_db_healthcheck, IPremiumUserCreate, IPremiumUserRead, \
-    remove_user, deactivate_premium_user_in_db
+    remove_user, deactivate_premium_user_in_db, add_new_qr_user
 from server_utils import assert_valid_premium_user, get_no_dog_status, delete_expired_free_users, get_current_speed, \
     force_high_avg_speed, add_free_user, add_new_premium_user, network_speed_check, deauth_premium_user, \
-    delete_expired_premium_users, get_current_status, get_avg_speed
+    delete_expired_premium_users, get_current_status, get_avg_speed, generate_qr, activate_qr_user
 from utils import logger, UserType, user_status
 
 no_dog_url = os.getenv("NO_DOG_URL")
@@ -39,10 +40,10 @@ def get_db():
 #     """
 #     Adding the background tasks to run while the server is running
 #     """
-    # loop = asyncio.get_running_loop()
-    # loop.create_task(remain_valid_speed())
-    # loop.create_task(delete_expired_users_background())
-    # loop.create_task(delete_expired_premium_users_task())
+# loop = asyncio.get_running_loop()
+# loop.create_task(remain_valid_speed())
+# loop.create_task(delete_expired_users_background())
+# loop.create_task(delete_expired_premium_users_task())
 
 
 async def delete_expired_premium_users_task():
@@ -113,9 +114,10 @@ async def login_premium_user(user_to_login: dict, session=Depends(get_db)):
     return await assert_valid_premium_user(user=user, session=session)
 
 
-@app_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str])
-#@network_speed_check(average_download_speed=average_download_speed)
-async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
+@app_route.post("/add_premium_user", response_model=Union[IPremiumUserRead, str], summary="Create a new premium user",
+                description="This endpoint creates a new premium user in the db and authenticate it")
+# @network_speed_check(average_download_speed=average_download_speed)
+async def add_premium_user(user_to_add: UserToAddSchema, session=Depends(get_db)):
     """
     Receive the details of a new user and add it to the db
     :param user_to_add: IUserCreate schema holding a user to add
@@ -123,7 +125,7 @@ async def add_premium_user(user_to_add: dict, session=Depends(get_db)):
     :return: IUserRead object holding the details of the new created user
     """
     logger.debug(f"About to add a new user to db {user_to_add}")
-    new_user = IPremiumUserCreate(**user_to_add["user_to_add"])
+    new_user = IPremiumUserCreate(**user_to_add.dict())
     resp = await add_new_premium_user(new_user=new_user, session=session)
     return JSONResponse(status_code=200, content=resp.dict())
 
@@ -145,6 +147,7 @@ async def create_new_free_user(token: str, session=Depends(get_db)):
     res: Tuple[IFreeUserRead, JSONResponse] = await add_free_user(token=token, session=session)
     return JSONResponse(status_code=res[1].status_code, content=res[0].dict())
 
+
 @app_route.get("/user_status")
 async def get_user_status(token: str, session=Depends(get_db)):
     """
@@ -152,8 +155,7 @@ async def get_user_status(token: str, session=Depends(get_db)):
     """
     res: user_status = await get_current_status(token=token, session=session)
     return JSONResponse(status_code=200, content=res.dict())
-# TODO add a status examination for backgroung check
-# TODO add an option for premium time
+
 
 @app_route.get("total_avg_spd")
 async def get_server_avg_speed():
@@ -162,3 +164,27 @@ async def get_server_avg_speed():
     """
     res = get_avg_speed()
     return JSONResponse(status_code=200, content=f"Average speed is {res}")
+
+
+@app_route.get("/test")
+async def generate_qr(session=Depends(get_db)):
+    """
+    Generates a new qr user to be available for a usage and adds it to the qr_user table in DB
+    :return: QR image to be scanned
+    """
+    qr, qr_token = generate_qr()
+    add_new_qr_user(session=session, qr_token=qr_token)
+    img = qr.make_image(fill_color="black", back_color="white")
+    img = img.convert("RGB")
+    img.show()
+    return JSONResponse(status_code=200, content="Created a new QR user, you can scan and connect to the wifi ")
+
+
+@app_route.post("/login/qr_user/{qr_token}", response_model=IQRUserRead)
+async def add_and_connect_qr_user(qr_token: str, session=Depends(get_db)):
+    """
+    Gets a token of a qr user connects it to the wifi
+    :return: IPremiumUserRead object holding the data of the user to be connected
+    """
+    return await activate_qr_user(qr_token=qr_token, session=session)
+
