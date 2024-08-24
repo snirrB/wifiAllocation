@@ -5,7 +5,9 @@ import { FaWifi, FaBolt, FaCrown } from "react-icons/fa";
 
 import "../../styles/page.css";
 import "./pricing.css";
-import { BackButton } from "../../Components/buttons/buttons";
+import { BackButton } from "../../components/buttons/buttons";
+import { http } from "../../Services/utils";
+import { NO_TOKEN_URL } from "../LoginRegister/WaitForToken";
 
 const PricingPlanContainer = ({ plan }) => {
   const navigate = useNavigate();
@@ -13,8 +15,17 @@ const PricingPlanContainer = ({ plan }) => {
   const _title = title.toLowerCase();
   const handleClick = (e) => {
     e.preventDefault();
-    console.log(`Chosen ${_title}.\nWhat now?`);
-    navigate("/status");
+    apiService
+      .setPricingPlan(plan.title)
+      .then((res) => {
+        navigate("/status");
+      })
+      .catch((err) => {
+        console.error(err);
+        if (err?.response?.data?.message) {
+          alert(err.response.data.message);
+        }
+      });
   };
   return (
     <section className="pricing-plan-wrapper" onClick={handleClick}>
@@ -31,8 +42,15 @@ const PricingPlanContainer = ({ plan }) => {
 };
 
 const PremiumPricing = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!http.token) {
+      navigate(NO_TOKEN_URL);
+    }
+  }, [http.token]);
+
   const location = useLocation();
-  const from = location.state?.from || "/";
+  const from = location.state?.from || "/login";
 
   const plans = [
     {
@@ -57,9 +75,8 @@ const PremiumPricing = () => {
         "Best for heavy usage and multiple devices. Speeds up to 300 Mbps.",
     },
   ];
-  const token = "be3e4d99";
 
-  useEffect(() => {}, [token]);
+  useEffect(() => {}, [http.token]);
 
   return (
     <div className="main-wrapper">

@@ -16,6 +16,7 @@ export const BackButton = ({ to }) => {
   const navigate = useNavigate();
   const handleClick = (e) => {
     e.preventDefault();
+    console.log("back to", to);
     navigate(to);
   };
   return (
@@ -30,9 +31,17 @@ export const LogoutButton = () => {
   const navigate = useNavigate();
   const handleClick = (e) => {
     e.preventDefault();
-    apiService.logoutPremiumUser().then(() => {
-      navigate("/");
-    });
+    apiService
+      .logoutPremiumUser()
+      .then((res) => {
+        navigate("/login");
+      })
+      .catch((err) => {
+        console.error(err);
+        if (err?.response?.data?.message) {
+          alert(err.response.data.message);
+        }
+      });
   };
   return (
     <section className="back-button" onClick={handleClick}>

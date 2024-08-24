@@ -1,3 +1,5 @@
+@import url("mobile.css");
+
 .main-wrapper {
   display: flex;
   justify-content: center;

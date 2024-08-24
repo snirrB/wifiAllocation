@@ -6,15 +6,25 @@ import { FaArrowRight } from "react-icons/fa";
 import "../../styles/page.css";
 import "./Status.css";
 
-import { BackButton } from "../../Components/buttons/buttons";
+import { BackButton } from "../../components/buttons/buttons";
 import Status from "./Status";
-import VideoAdvertisement from "../../Components/advertisement/ad";
+import VideoAdvertisement from "../../components/advertisement/ad";
+
+import { NO_TOKEN_URL } from "../LoginRegister/WaitForToken";
+import { http } from "../../Services/utils";
 
 const FreeUserStatus = () => {
   const location = useLocation();
-  const from = location.state?.from || "/";
+  const from = location.state?.from || "/login";
   const [adCountdown, setAdCountdown] = useState(10);
   const [showStatus, setShowStatus] = useState(false);
+
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!http.token) {
+      navigate(NO_TOKEN_URL);
+    }
+  }, [http.token]);
 
   function handleAfterAd(e) {
     e.preventDefault();

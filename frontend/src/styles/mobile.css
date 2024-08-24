@@ -1,0 +1,14 @@
+/*Mobile adjustments*/
+@media screen and (max-width: 600px) {
+  .wrapper,
+  .terms-wrapper,
+  .main-wrapper,
+  .status-wrapper {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    * {
+      max-width: calc(100vw - 25px);
+      max-height: calc(100vh - 25px);
+    }
+  }
+}

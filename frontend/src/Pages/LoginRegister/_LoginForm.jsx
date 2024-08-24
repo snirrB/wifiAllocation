@@ -8,11 +8,13 @@ import {
   FaCreditCard,
   FaKey,
 } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import { QRPopup } from "../../components/QR/QRPopUp";
 import { apiService } from "../../Services/api";
-import { QRPopup } from "../../Components/QR/QRPopUp";
+import { useNavigate } from "react-router-dom";
 
-export const LoginForm = ({ handleLogin, handleGuest, registerLink }) => {
+export const LoginForm = ({ registerLink }) => {
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -23,6 +25,27 @@ export const LoginForm = ({ handleLogin, handleGuest, registerLink }) => {
 
   const closePopup = () => {
     setIsPopupOpen(false);
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    apiService
+      .loginPremiumUser(email, password)
+      .then((res) => {
+        console.log("User logged in:", res);
+        navigate("/pricing", { state: { isPremium: true } });
+      })
+      .catch((err) => {
+        console.error("Error logging in user:", err);
+        if (err?.response?.data?.message) {
+          alert(err.response.data.message);
+        }
+      });
+  };
+
+  const handleGuest = (e) => {
+    e.preventDefault();
+    navigate("/terms");
   };
 
   return (

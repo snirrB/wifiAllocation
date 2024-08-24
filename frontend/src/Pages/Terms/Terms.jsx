@@ -1,20 +1,35 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Terms.css";
 import { apiService } from "../../Services/api";
+import { http } from "../../Services/utils";
+import { NO_TOKEN_URL } from "../LoginRegister/WaitForToken";
 
 const Terms = () => {
   const navigate = useNavigate();
+  useEffect(() => {
+    if (!http.token) {
+      navigate(NO_TOKEN_URL);
+    }
+  }, [http.token]);
 
-  const handleApprove = async () => {
-    const token = "be3e4d99";
-    const result = await apiService.loginFreeUser(token);
-    console.log("result", result);
-    navigate("/status/free", { state: { isPremium: false } });
+  const handleApprove = () => {
+    apiService
+      .loginFreeUser(http.token)
+      .then((result) => {
+        console.log("result", result);
+        navigate("/status/free", { state: { isPremium: false } });
+      })
+      .catch((err) => {
+        console.error(err);
+        if (err?.response?.data?.message) {
+          alert(err.response.data.message);
+        }
+      });
   };
 
   const handleCancel = () => {
-    navigate("/");
+    navigate("/login");
   };
 
   return (
