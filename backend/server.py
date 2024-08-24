@@ -2,8 +2,6 @@ import asyncio
 import os
 from typing import Union, Tuple
 
-import qrcode
-from PIL import Image
 from fastapi import APIRouter
 from fastapi import Depends
 from sqlalchemy import create_engine
@@ -12,12 +10,12 @@ from sqlmodel import Session
 from starlette.responses import JSONResponse
 
 from backend.models import UserToAddSchema
-from db import IFreeUserRead
+from db import IFreeUserRead, IQRUserRead
 from db_utils import create_db_healthcheck, IPremiumUserCreate, IPremiumUserRead, \
-    remove_user, deactivate_premium_user_in_db
+    remove_user, deactivate_premium_user_in_db, add_new_qr_user
 from server_utils import assert_valid_premium_user, get_no_dog_status, delete_expired_free_users, get_current_speed, \
     force_high_avg_speed, add_free_user, add_new_premium_user, network_speed_check, deauth_premium_user, \
-    delete_expired_premium_users, get_current_status, get_avg_speed
+    delete_expired_premium_users, get_current_status, get_avg_speed, generate_qr, activate_qr_user
 from utils import logger, UserType, user_status
 
 no_dog_url = os.getenv("NO_DOG_URL")
@@ -167,22 +165,26 @@ async def get_server_avg_speed():
     res = get_avg_speed()
     return JSONResponse(status_code=200, content=f"Average speed is {res}")
 
+
 @app_route.get("/test")
-async def genereate_qr():
+async def generate_qr(session=Depends(get_db)):
     """
-    Generates a new qr user to be available for a usage
+    Generates a new qr user to be available for a usage and adds it to the qr_user table in DB
     :return: QR image to be scanned
     """
-    qr = qrcode.QRCode(
-        version=1,  # controls the size of the QR Code
-        error_correction=qrcode.constants.ERROR_CORRECT_L,  # error correction level
-        box_size=10,  # size of each box in pixels
-        border=4,  # thickness of the border (in boxes)
-    )
-    qr.add_data(os.getenv("QR_URL"))
-    qr.make(fit=True)
+    qr, qr_token = generate_qr()
+    add_new_qr_user(session=session, qr_token=qr_token)
     img = qr.make_image(fill_color="black", back_color="white")
     img = img.convert("RGB")
     img.show()
+    return JSONResponse(status_code=200, content="Created a new QR user, you can scan and connect to the wifi ")
 
-# TODO: Add the logic that add the new user with the token to its table and activates it in case
+
+@app_route.post("/login/qr_user/{qr_token}", response_model=IQRUserRead)
+async def add_and_connect_qr_user(qr_token: str, session=Depends(get_db)):
+    """
+    Gets a token of a qr user connects it to the wifi
+    :return: IPremiumUserRead object holding the data of the user to be connected
+    """
+    return await activate_qr_user(qr_token=qr_token, session=session)
+

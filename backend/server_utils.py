@@ -1,21 +1,23 @@
+import json
 import os
+import uuid
 from datetime import datetime, timedelta
 from functools import wraps
-from typing import Type, List
+from typing import Type, List, Tuple
 
+import qrcode
 import requests
 from fastapi import HTTPException
 from sqlmodel import select
-from sqlalchemy import func
-from starlette.responses import JSONResponse
-import json
+
 from db import FreeUser, IFreeUserRead, IPremiumUserRead, IPremiumUserCreate, PremiumUser
 from db_utils import validate_user, add_new_free_user_to_db, remove_user, add_new_premium_user_to_db, \
-    activate_premium_user_in_db, get_expired_premium_users, get_premium_user, get_free_user
+    activate_premium_user_in_db, get_expired_premium_users, get_premium_user, get_free_user, validate_qr_user
 from utils import logger, no_dog_url, UserType, user_status, serialize_td
 
 minimum_allowed_speed = os.getenv("MINIMUM_SPEED_ALLOWED")
 free_user_allowed_session = os.getenv("FREE_USER_SESSION_ALLOWED")
+
 
 def authenticate_user(token: str):
     """
@@ -30,7 +32,7 @@ def authenticate_user(token: str):
         return res
     except Exception as e:
         logger.error(f"Unable to authenticate another user, with error: {e}")
-        raise HTTPException(status_code=400, detail="Unable to authenticate another user")
+        raise HTTPException(status_code=400, detail=f"Unable to authenticate another user, error: {e}")
 
 
 def assert_server_speed(func):
@@ -62,8 +64,7 @@ async def handle_too_slow_speed(args, kwargs):
     raise HTTPException(status_code=404, detail="There are too many users connected, try again later")
 
 
-
-#@assert_server_speed
+# @assert_server_speed
 async def add_new_premium_user(new_user, session, premium_user: bool = True) -> IPremiumUserRead:
     """
     Add a new premium user object
@@ -140,6 +141,7 @@ async def get_current_speed():
     avg_speed = json.loads(res.content.decode())["message"]
     logger.debug(f"Got current speed from server: {avg_speed}")
     return avg_speed
+
 
 async def get_avg_speed():
     """
@@ -250,6 +252,8 @@ async def handle_auth_request(response, session, user_type: UserType, email: str
         logger.error(f"NoDog failed to auth a user, now removing from db, error: {content}")
         remove_user(user_email=email, session=session, user_type=user_type, user_token=token)
         raise HTTPException(status_code=400, detail=f"Unable to auth a user, with error: {content}")
+
+
 # The server could not authenticate the new user, remove the free user from the db
 
 async def get_current_status(token: str, session):
@@ -266,7 +270,7 @@ async def get_current_status(token: str, session):
         raise HTTPException(status_code=405, detail="Unable to get current status for user, no such user found in db")
 
 
-async def premium_user_status(premium_user:PremiumUser) -> user_status:
+async def premium_user_status(premium_user: PremiumUser) -> user_status:
     """
     Return a premium user status response containing the status of the current premium user
     """
@@ -276,7 +280,8 @@ async def premium_user_status(premium_user:PremiumUser) -> user_status:
     time_remaining = expiration_time - current_time
     time_remaining: dict = serialize_td(td=time_remaining)
     return user_status(time_remaimning=time_remaining,
-                        login_time=premium_user.login_time.isoformat(),  current_speed=current_speed)
+                       login_time=premium_user.login_time.isoformat(), current_speed=current_speed)
+
 
 async def free_user_status(free_user: FreeUser, session):
     """
@@ -288,4 +293,36 @@ async def free_user_status(free_user: FreeUser, session):
     time_remaining = expiration_time - current_time
     time_remaining: dict = serialize_td(td=time_remaining)
     return user_status(time_remaimning=time_remaining,
-                        login_time=free_user.login_time.isoformat(),  current_speed=current_speed)
+                       login_time=free_user.login_time.isoformat(), current_speed=current_speed)
+
+
+def generate_qr() -> Tuple[qrcode.QRCode, str]:
+    """
+    Generates a new qr code and token to add to the QRUser table
+    :return:
+    """
+    logger.debug("About to generate a new qr")
+    qr: qrcode.QRCode = qrcode.QRCode(
+        version=1,  # controls the size of the QR Code
+        error_correction=qrcode.constants.ERROR_CORRECT_L,  # error correction level
+        box_size=10,  # size of each box in pixels
+        border=4,  # thickness of the border (in boxes)
+    )
+    qr_token_to_add = str(uuid.uuid4()).replace('-', '')[:12]
+    base_qr_url = os.getenv("QR_URL")
+    qr.add_data(f"{base_qr_url}/{qr_token_to_add}")
+    qr.make(fit=True)
+    logger.debug(f"Created a new qr with details: {base_qr_url}/{qr_token_to_add}")
+    return qr, qr_token_to_add
+
+
+async def activate_qr_user(session, qr_token: str):
+    """
+    :param session: The engine session object
+    :param qr_token: The token of the user to be activated
+    :return:
+    """
+    new_qr_user = validate_qr_user(session=session, qr_token=qr_token)
+    #TODO: check how to get the real token instead of the one generated in the db
+    #authenticate_user(token=qr_token)
+    return new_qr_user

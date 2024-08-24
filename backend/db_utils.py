@@ -8,7 +8,8 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
-from db import PremiumUser, IPremiumUserCreate, IPremiumUserRead, IFreeUserCreate, FreeUser, IFreeUserRead
+from db import PremiumUser, IPremiumUserCreate, IPremiumUserRead, IFreeUserCreate, FreeUser, IFreeUserRead, \
+    IQRUserCreate, QRUser, IQRUserRead
 from utils import logger, UserType
 
 no_dog_url = os.getenv("NO_DOG_URL")
@@ -170,6 +171,21 @@ def add_new_free_user_to_db(token: str, session):
         raise HTTPException(status_code=400, detail=f"Unable to add a new user to db, error: {e}")
 
 
+def add_new_qr_user(session, qr_token: str):
+    """
+    Gets a new token for the qr user, creates in and adds it to the DB.
+    :param session: The engine session object
+    :param qr_token: IQRUserRead object holding the new user created
+    :return:
+    """
+    new_qr_user = IQRUserCreate(qr_token=qr_token)
+    new_qr_user = QRUser(**new_qr_user.dict())
+    session.add(new_qr_user)
+    session.commit()
+    logger.debug(f"Added a new qr user to the db, token:{qr_token}")
+    return IQRUserRead.from_orm(new_qr_user)
+
+
 def activate_premium_user_in_db(session, new_user: IPremiumUserCreate):
     """
     Set the active field in the db of the user into True
@@ -238,7 +254,7 @@ def get_premium_user(token: str, session):
     return session.exec(
         select(PremiumUser).where(
             PremiumUser.token == token)).first()
-    
+
 
 def get_free_user(token: str, session):
     """
@@ -248,3 +264,28 @@ def get_free_user(token: str, session):
     return session.exec(
         select(FreeUser).where(
             FreeUser.token == token)).first()
+
+
+def validate_qr_user(session, qr_token):
+    """
+    Gets a token to validate in the qr user table
+    :param session: The engine session object
+    :param qr_token: The token to validate
+    :return: IQRUserRead object holding the user
+    """
+    try:
+        user = session.exec(
+            select(QRUser).where(
+                QRUser.qr_token == qr_token)).first()
+        if not user:
+            logger.error(f"Failed to validate a qr user with a token: {qr_token}, didn't found in db")
+            raise HTTPException(status_code=404, detail=f"Received an invalid token: {qr_token} which is not in the db")
+        if user.active:
+            logger.info(f"Can not validate a qr user with token: {qr_token}, it is already activate")
+        user.active = True
+        session.add(user)
+        session.commit()
+        return IQRUserRead.from_orm(user)
+    except Exception as e:
+        logger.error(f"Failed to validate a user, got an error: {e}")
+        raise HTTPException(status_code=404, detail=f"Could not validate token: {qr_token} with error: {e}")

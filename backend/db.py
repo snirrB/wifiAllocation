@@ -57,7 +57,6 @@ class IPremiumUserCreate(IBasePremiumUser, table=False):
     This class represents a creation user object in the db
     """
     password: str
-    qr_token: str = Field(default=None)
 
     @validator('email')
     def validate_email(cls, v: str):
@@ -81,7 +80,22 @@ class QRUser(SQLModel, table=True):
     """
     QR users table
     """
-    id: str = Field(primary_key=True)
+    id: int | None = Field(primary_key=True, default=None)
     generation_time: datetime = Field(default_factory=datetime.now)
     active: bool = Field(default=False)
+    qr_token: str = Field(unique=True)
 
+
+class IQRUserCreate(SQLModel):
+    """
+    Class representing the qr user for the creation
+    """
+    qr_token: str
+
+
+class IQRUserRead(SQLModel):
+    """
+    Class representing the read qr user object
+    """
+    qr_token: str
+    generation_time: datetime
